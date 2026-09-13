@@ -215,6 +215,44 @@ def human_like_settings() -> dict:
         return dict(DEFAULT_HUMAN_LIKE)
     return cfg
 
+# ---------------------------------------------------------------- 界面语言
+# 网页/浮窗/提示的语言："zh"（默认）或 "en"。网页右上角可随时切换。
+DEFAULT_LANGUAGE = "zh"
+
+
+def _write_ui_config(**values) -> dict:
+    """把若干顶层配置写回 ui_config.json；只动这些键，其余原样保留。
+
+    本模块唯一的写操作入口：界面语言、浮窗显示偏好等“显示类”设置需要即时
+    持久化，而配置文件的路径与格式集中在这里，避免各模块各写一份 JSON。
+    """
+    try:
+        data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            data = {}
+    except Exception:
+        data = {}
+    data.update(values)
+    CONFIG_PATH.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return data
+
+
+def ui_language() -> str:
+    """读取界面语言（ui_config.json 的 language 段）；非法值回退中文。"""
+    lang = str(_load_ui_config().get("language") or DEFAULT_LANGUAGE).lower()
+    return lang if lang in ("zh", "en") else DEFAULT_LANGUAGE
+
+
+def save_ui_language(lang: str) -> str:
+    """保存界面语言，返回写入后的值。"""
+    lang = str(lang or "").lower()
+    if lang not in ("zh", "en"):
+        lang = DEFAULT_LANGUAGE
+    _write_ui_config(language=lang)
+    return lang
+
+
 # ---------------------------------------------------------------- 浮窗显示偏好
 # 日志浮窗自己的显示开关（与自动化行为无关，纯显示）：
 #   show_account: 「账号」行是否显示战网昵称。截图/录屏/开直播时点浮窗里的
@@ -234,24 +272,14 @@ def overlay_settings() -> dict:
 def save_overlay_setting(key: str, value) -> dict:
     """把某个浮窗显示偏好写进 ui_config.json 的 overlay 段。
 
-    这是本模块唯一的写操作：浮窗（log_overlay）里点眼睛按钮需要立即持久化，
-    而配置文件路径与格式集中在这里，避免各模块各写一份。
     **只改 overlay 段，其余配置（昵称、日志目录、延时、ROI 等）原样保留。**
     """
     if key not in DEFAULT_OVERLAY:
         raise KeyError(f"未知的浮窗配置项：{key}")
-    try:
-        data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-        if not isinstance(data, dict):
-            data = {}
-    except Exception:
-        data = {}
-    section = data.get("overlay")
-    section = dict(section) if isinstance(section, dict) else {}
+    saved = _load_ui_config().get("overlay")
+    section = dict(saved) if isinstance(saved, dict) else {}
     section[key] = bool(value)
-    data["overlay"] = section
-    CONFIG_PATH.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    _write_ui_config(overlay=section)
     return {**DEFAULT_OVERLAY, **section}
 
 

@@ -40,9 +40,12 @@ ROOT = Path(__file__).resolve().parent
 WEB_DIR = ROOT / "web"
 CONFIG_PATH = ROOT / "ui_config.json"
 # 站点/端口/日志缓冲来自 config.py（可通过环境变量覆盖，见 HS_HOST/HS_PORT/HS_LOG_BUFFER_SIZE）。
+import i18n
+from i18n import t
 from config import (
     DEFAULT_AUTO_CONCEDE, DEFAULT_HUMAN_LIKE, DEFAULT_LIVENESS, HOST,
-    BASE_PORT, LOG_BUFFER_SIZE, _USER_DELAY_KEYS, RecommendationConfig)
+    BASE_PORT, LOG_BUFFER_SIZE, DEFAULT_LANGUAGE, _USER_DELAY_KEYS,
+    RecommendationConfig)
 
 
 # ---------------------------------------------------------------- 管理员检测
@@ -289,18 +292,19 @@ def _start_automation(reset_stats: bool = True):
     CTRL.phase = "playing"
     CTRL.prepared = True
     if reset_stats:
-        _log("SYS", f"自动化启动：用户 {name}，日志目录 {log_root}（战绩从 0 开始）")
+        _log("SYS", t("msg.log.started", name=name, root=log_root))
     else:
-        _log("SYS", f"自动化恢复：用户 {name}，日志目录 {log_root}"
-                    f"（战绩继续累计：已完成 {int(getattr(fsm, 'game_count', 0) or 0)} 场）")
+        _log("SYS", t("msg.log.resumed", name=name, root=log_root,
+                      games=int(getattr(fsm, "game_count", 0) or 0)))
     if name and "#" not in name:
-        _log("WARN", "用户 ID 未包含 #编号，可能无法识别己方玩家，建议填写完整战网昵称。")
+        _log("WARN", t("msg.name.no_number"))
     _stdout_capture_start()
     _register_hotkey()
-    t = threading.Thread(target=_automation_worker, args=(fsm,),
-                         name="hs-automation", daemon=True)
-    CTRL.automation_thread = t
-    t.start()
+    # 注意：不要把这个局部变量叫 t —— 会遮蔽 i18n 的 t() 翻译函数。
+    worker = threading.Thread(target=_automation_worker, args=(fsm,),
+                              name="hs-automation", daemon=True)
+    CTRL.automation_thread = worker
+    worker.start()
     return True, "自动化已启动"
 
 
@@ -350,11 +354,13 @@ def _automation_worker(fsm):
             else:
                 CTRL.phase = "idle"
         if summary["games"]:
-            _log("SYS", f"自动化结束：共完成 {summary['games']} 场对战，"
-                        f"赢 {summary['wins']} 场"
-                        f"{'，自动认输 ' + str(summary['concedes']) + ' 场' if summary['concedes'] else ''}。")
+            _log("SYS", t("msg.summary.with_games", games=summary["games"],
+                          wins=summary["wins"],
+                          concedes=(t("msg.summary.concedes",
+                                      n=summary["concedes"])
+                                    if summary["concedes"] else "")))
         else:
-            _log("SYS", "自动化结束。")
+            _log("SYS", t("msg.summary.no_games"))
         if com_ready:
             try:
                 import pythoncom
@@ -373,10 +379,10 @@ def _register_hotkey():
             pass
         keyboard.add_hotkey("ctrl+q", _on_ctrl_q)
         CTRL.hotkey_registered = True
-        _log("SYS", "热键 Ctrl+Q 已注册（立即停止）。")
+        _log("SYS", t("msg.hotkey.ok"))
     except Exception as exc:
         CTRL.hotkey_registered = False
-        _log("WARN", f"注册 Ctrl+Q 热键失败：{exc}（仍可通过页面停止）")
+        _log("WARN", t("msg.hotkey.failed", error=exc))
 
 
 def _remove_hotkey():
@@ -389,7 +395,7 @@ def _remove_hotkey():
 
 
 def _on_ctrl_q():
-    _log("WARN", "收到 Ctrl+Q，立即停止自动化。")
+    _log("WARN", t("msg.log.ctrlq"))
     with CTRL.lock:
         CTRL.phase = "idle"
         CTRL.stopped_by = "ctrlq"
@@ -440,8 +446,8 @@ def _schedule_worker(start_dt: datetime, end_dt):
             with CTRL.lock:
                 if CTRL.schedule.get("start") != start_dt:
                     return
-                t = CTRL.automation_thread
-            if t is None or not t.is_alive():
+                worker = CTRL.automation_thread
+            if worker is None or not worker.is_alive():
                 break
             time.sleep(1)
     except Exception:
@@ -449,18 +455,34 @@ def _schedule_worker(start_dt: datetime, end_dt):
 
 
 # ---------------------------------------------------------------- API 实现
+# 状态机状态 -> 文案键（显示时按当前语言取，见 i18n）。
 STATE_LABELS = {
-    "": "待机",
-    "Leave Hearth Stone": "炉石未运行",
-    "Wait main menu": "等待主菜单",
-    "Main Menu": "主菜单",
-    "Choosing Hero": "选择职业",
-    "Match Opponent": "匹配对手",
-    "Choosing Card": "换牌阶段",
-    "Battling": "对战中",
-    "Quitting Battle": "对局结算",
-    "ERROR": "状态异常",
+    "": "msg.state.idle",
+    "Leave Hearth Stone": "msg.state.leave_hs",
+    "Wait main menu": "msg.state.wait_main_menu",
+    "Main Menu": "msg.state.main_menu",
+    "Choosing Hero": "msg.state.choosing_hero",
+    "Match Opponent": "msg.state.matching",
+    "Choosing Card": "msg.state.choosing_card",
+    "Battling": "msg.state.battling",
+    "Quitting Battle": "msg.state.quitting",
+    "ERROR": "msg.state.error",
 }
+
+# 阶段监测线程的内部控制标签 -> 文案键（内部标签保持不变，只影响显示）。
+STAGE_KEYS = {
+    "未对局": "msg.stage.none",
+    "对局结束": "msg.stage.end",
+    "换牌": "msg.stage.mulligan",
+    "我方出牌": "msg.stage.mine",
+    "对手回合": "msg.stage.opponent",
+}
+
+
+def state_label(state: str) -> str:
+    """状态机状态的显示文案（跟随界面语言）。"""
+    key = STATE_LABELS.get(state)
+    return t(key) if key else (state or t("msg.state.idle"))
 
 
 def api_save_config(body: dict):
@@ -473,21 +495,24 @@ def api_save_config(body: dict):
         warnings.append("日志目录不存在，请确认路径正确（通常为炉石安装目录下的 Logs 文件夹）。")
     with CTRL.lock:
         if CTRL.automation_thread is not None:
-            return {"ok": False, "error": "自动化运行中，请先停止后再修改配置。"}
+            return {"ok": False,
+                "error": t("msg.api.locked", what=t("msg.what.config"))}
         cfg = load_config()
         cfg["name"] = name
         cfg["log_root"] = log_root
         save_config(cfg)
         _apply_constants(name, log_root)
     _log("SYS", f"配置已保存：用户 {name or '（未填写）'}，日志目录 {log_root or '（未填写）'}")
-    return {"ok": True, "message": "配置已保存", "warnings": warnings}
+    return {"ok": True, "message": t("msg.api.config_saved"),
+            "warnings": warnings}
 
 
 def api_save_concede(body):
     """保存自动投降配置（ui_config.json 的 auto_concede 段）。"""
     with CTRL.lock:
         if CTRL.automation_thread is not None:
-            return {"ok": False, "error": "自动化运行中，请先停止后再修改自动投降配置。"}
+            return {"ok": False, "error": t("msg.api.locked",
+                                            what=t("msg.what.concede"))}
         cfg = load_config()
         ac = dict(cfg.get("auto_concede") or DEFAULT_AUTO_CONCEDE)
         ac["enabled"] = bool(body.get("enabled", ac.get(
@@ -496,13 +521,15 @@ def api_save_concede(body):
             threshold = float(body.get("threshold", ac.get(
                 "threshold", DEFAULT_AUTO_CONCEDE["threshold"])))
         except (TypeError, ValueError):
-            return {"ok": False, "error": "阈值必须为数字（0-100）。"}
+            return {"ok": False, "error": t("msg.api.bad_number",
+                                            field=t("msg.field.threshold"))}
         threshold = max(0.0, min(100.0, threshold))
         try:
             rounds = int(body.get("rounds", ac.get(
                 "rounds", DEFAULT_AUTO_CONCEDE["rounds"])))
         except (TypeError, ValueError):
-            return {"ok": False, "error": "连续回合数必须为整数（1-50）。"}
+            return {"ok": False, "error": t("msg.api.bad_int",
+                                            field=t("msg.field.rounds"))}
         rounds = max(1, min(50, rounds))
         ac["threshold"] = threshold
         ac["rounds"] = rounds
@@ -510,7 +537,7 @@ def api_save_concede(body):
         save_config(cfg)
     _log("SYS", f"自动投降配置已保存：{'开启' if ac['enabled'] else '关闭'}，"
                 f"阈值 {threshold:.0f}%，连续 {rounds} 回合。")
-    return {"ok": True, "message": "自动投降配置已保存",
+    return {"ok": True, "message": t("msg.api.concede_saved"),
             "concede": {"enabled": ac["enabled"],
                         "threshold": threshold, "rounds": rounds}}
 
@@ -531,7 +558,8 @@ def api_save_human_like(body):
     """保存活人感配置（ui_config.json 的 human_like 段）。"""
     with CTRL.lock:
         if CTRL.automation_thread is not None:
-            return {"ok": False, "error": "自动化运行中，请先停止后再修改活人感配置。"}
+            return {"ok": False, "error": t("msg.api.locked",
+                                            what=t("msg.what.human_like"))}
         cfg = load_config()
         hl = _current_human_like()
         hl["enabled"] = bool(body.get("enabled", hl["enabled"]))
@@ -541,7 +569,8 @@ def api_save_human_like(body):
             h_lo = float(body.get("hover_min", hl["hover_min"]))
             h_hi = float(body.get("hover_max", hl["hover_max"]))
         except (TypeError, ValueError):
-            return {"ok": False, "error": "延时时长/悬停时长必须为数字。"}
+            return {"ok": False, "error": t("msg.api.bad_number",
+                                            field=t("page.hl.min"))}
         lo = max(0.0, min(60.0, lo))
         hi = max(lo, min(60.0, hi))
         h_lo = max(0.05, min(30.0, h_lo))
@@ -553,7 +582,8 @@ def api_save_human_like(body):
         save_config(cfg)
     _log("SYS", f"活人感配置已保存：{'开启' if hl['enabled'] else '关闭'}"
                 f"（随机延时 {lo:.1f}~{hi:.1f}s，每处悬停 {h_lo:.1f}~{h_hi:.1f}s）。")
-    return {"ok": True, "message": "活人感配置已保存", "human_like": hl}
+    return {"ok": True, "message": t("msg.api.human_like_saved"),
+            "human_like": hl}
 
 
 # ------------------------------------------------------------------ 炉石存活检测
@@ -576,7 +606,8 @@ def api_save_liveness(body):
     """
     with CTRL.lock:
         if CTRL.automation_thread is not None:
-            return {"ok": False, "error": "自动化运行中，请先停止后再修改存活检测配置。"}
+            return {"ok": False, "error": t("msg.api.locked",
+                                            what=t("msg.what.liveness"))}
         cfg = load_config()
         lv = _current_liveness()
         lv["enabled"] = bool(body.get("enabled", lv["enabled"]))
@@ -586,7 +617,8 @@ def api_save_liveness(body):
             stop = float(body.get("log_stale_stop_seconds",
                                   lv["log_stale_stop_seconds"]))
         except (TypeError, ValueError):
-            return {"ok": False, "error": "停滞阈值必须为数字（秒）。"}
+            return {"ok": False, "error": t("msg.api.bad_number",
+                                            field=t("msg.field.stall"))}
         warn = max(1.0, min(3600.0, warn))
         stop = max(warn, min(7200.0, stop))
         lv["log_stale_warn_seconds"] = warn
@@ -595,7 +627,29 @@ def api_save_liveness(body):
         save_config(cfg)
     _log("SYS", f"存活检测配置已保存：{'开启' if lv['enabled'] else '关闭'}"
                 f"（Power.log 停滞 {warn:.0f}s 告警 / {stop:.0f}s 自动停止）。")
-    return {"ok": True, "message": "存活检测配置已保存", "liveness": lv}
+    return {"ok": True, "message": t("msg.api.liveness_saved"), "liveness": lv}
+
+
+# ------------------------------------------------------------------ 界面语言
+def api_set_language(body):
+    """切换界面语言（网页右上角的中文/EN）。
+
+    立刻生效：网页用返回的文案表重绘，浮窗下一帧就用新语言渲染；同时把选择
+    写进 ui_config.json 的 language 段，下次启动仍是该语言。
+    """
+    requested = str((body or {}).get("lang") or "").strip().lower()
+    if requested not in i18n.LANGUAGES:
+        return {"ok": False, "error": t("msg.api.lang_bad", lang=requested)}
+    from config import save_ui_language
+    lang = i18n.set_language(requested)
+    try:
+        save_ui_language(lang)
+    except Exception as exc:
+        _log("WARN", f"界面语言保存失败：{exc}")
+    message = t("msg.api.lang_saved")
+    _log("SYS", message)
+    return {"ok": True, "lang": lang, "message": message,
+            "texts": i18n.texts(lang)}
 
 
 # ------------------------------------------------------------------ 延时设置
@@ -621,7 +675,8 @@ def api_save_delays(body):
     """保存延时配置（ui_config.json 的 delays 段）。"""
     with CTRL.lock:
         if CTRL.automation_thread is not None:
-            return {"ok": False, "error": "自动化运行中，请先停止后再修改延时配置。"}
+            return {"ok": False, "error": t("msg.api.locked",
+                                            what=t("msg.what.delays"))}
         cfg = load_config()
         delays = dict(cfg.get("delays") or {})
         for key in _USER_DELAY_KEYS:
@@ -630,16 +685,19 @@ def api_save_delays(body):
             try:
                 value = float(body[key])
             except (TypeError, ValueError):
-                return {"ok": False, "error": f"{key} 必须为数字。"}
+                return {"ok": False,
+                        "error": t("msg.api.bad_number", field=key)}
             lo, hi = _DELAY_BOUNDS[key]
             if not (lo <= value <= hi):
                 return {"ok": False,
-                        "error": f"{key} 必须介于 {lo}–{hi}。"}
+                        "error": t("msg.api.out_of_range", field=key,
+                                   lo=lo, hi=hi)}
             delays[key] = value
         cfg["delays"] = delays
         save_config(cfg)
     _log("SYS", "延时配置已保存。")
-    return {"ok": True, "message": "延时配置已保存", "delays": _current_delays()}
+    return {"ok": True, "message": t("msg.api.delays_saved"),
+            "delays": _current_delays()}
 
 
 def api_start(body: dict):
@@ -649,16 +707,16 @@ def api_start(body: dict):
     keep_score = bool(body.get("keep_score"))
     with CTRL.lock:
         if CTRL.automation_thread is not None or CTRL.starting:
-            return {"ok": False, "error": "自动化已经在运行中。"}
+            return {"ok": False, "error": t("msg.api.running")}
         cfg = load_config()
         name = (cfg.get("name") or "").strip()
         log_root = (cfg.get("log_root") or "").strip()
         if not name:
-            return {"ok": False, "error": "请先填写用户 ID。"}
+            return {"ok": False, "error": t("msg.api.need_name")}
         if not log_root:
-            return {"ok": False, "error": "请先填写炉石日志目录。"}
+            return {"ok": False, "error": t("msg.api.need_log")}
         if not os.path.isdir(log_root):
-            return {"ok": False, "error": f"日志目录不存在：{log_root}"}
+            return {"ok": False, "error": t("msg.api.log_missing", path=log_root)}
         # 手动开始会取消尚未开始的定时计划
         CTRL.schedule = {"start": None, "end": None}
     _persist_schedule(None, None)
@@ -676,8 +734,8 @@ def api_start(body: dict):
 
     threading.Thread(target=_boot, name="hs-boot", daemon=True).start()
     if keep_score:
-        return {"ok": True, "message": "正在恢复自动化（战绩继续累计），请稍候……"}
-    return {"ok": True, "message": "正在启动自动化，请稍候……"}
+        return {"ok": True, "message": t("msg.api.resuming")}
+    return {"ok": True, "message": t("msg.api.starting")}
 
 
 def _bring_hearthstone_foreground():
@@ -705,7 +763,7 @@ def api_prepare(body=None):
     """
     with CTRL.lock:
         if CTRL.automation_thread is not None or CTRL.starting:
-            return {"ok": False, "error": "自动化已经在运行中。"}
+            return {"ok": False, "error": t("msg.api.running")}
         CTRL.prepared = True
     if log_overlay is not None and not log_overlay.is_running():
         try:
@@ -714,11 +772,8 @@ def api_prepare(body=None):
             _log("WARN", f"开启日志浮窗失败：{exc}")
     threading.Thread(target=_bring_hearthstone_foreground,
                      name="hs-prepare", daemon=True).start()
-    _log("SYS", "已就绪：日志浮窗已开启、正在把炉石切到前台；未开始对战，"
-                "确认无误后再点「开始对战」。")
-    return {"ok": True, "prepared": True,
-            "message": "已就绪：浮窗已开、炉石已切前台（不会自动开始）。"
-                       "再点一次「开始对战」或浮窗的 ▶ 开始对战 才会真正开打。"}
+    _log("SYS", t("msg.log.ready"))
+    return {"ok": True, "prepared": True, "message": t("msg.api.prepared")}
 
 
 def api_stop(body: dict):
@@ -726,7 +781,7 @@ def api_stop(body: dict):
     if mode == "after_game":
         with CTRL.lock:
             if CTRL.automation_thread is None:
-                return {"ok": False, "error": "当前没有正在运行的自动化。"}
+                return {"ok": False, "error": t("msg.api.not_running")}
             fsm = CTRL.fsm
             CTRL.phase = "stopping"
             CTRL.stopped_by = "user_after_game"
@@ -738,10 +793,10 @@ def api_stop(body: dict):
         except Exception as exc:
             return {"ok": False, "error": f"发送停止请求失败：{exc}"}
         _log("WARN", "已请求：本局对战结束后停止。")
-        return {"ok": True, "message": "本局对战结束后将自动停止"}
+        return {"ok": True, "message": t("msg.api.stop_after")}
     with CTRL.lock:
         if CTRL.automation_thread is None:
-            return {"ok": False, "error": "当前没有正在运行的自动化。"}
+            return {"ok": False, "error": t("msg.api.not_running")}
         fsm = CTRL.fsm
         CTRL.phase = "idle"
         CTRL.stopped_by = "user_immediate"
@@ -752,7 +807,7 @@ def api_stop(body: dict):
     except Exception as exc:
         return {"ok": False, "error": f"发送停止指令失败：{exc}"}
     _log("WARN", "已发送立即停止指令。")
-    return {"ok": True, "message": "正在停止……"}
+    return {"ok": True, "message": t("msg.api.stopping")}
 
 
 def api_schedule(body: dict):
@@ -761,47 +816,48 @@ def api_schedule(body: dict):
     try:
         start_dt = datetime.fromisoformat(start_text)
     except ValueError:
-        return {"ok": False, "error": "开始时间格式不正确。"}
+        return {"ok": False, "error": t("msg.api.schedule_bad_start")}
     end_dt = None
     if end_text:
         try:
             end_dt = datetime.fromisoformat(end_text)
         except ValueError:
-            return {"ok": False, "error": "结束时间格式不正确。"}
+            return {"ok": False, "error": t("msg.api.schedule_bad_end")}
     now = datetime.now()
     if start_dt < now:
-        return {"ok": False, "error": "开始时间不能早于当前时间。"}
+        return {"ok": False, "error": t("msg.api.schedule_past")}
     if end_dt is not None and end_dt <= start_dt:
-        return {"ok": False, "error": "结束时间必须晚于开始时间。"}
+        return {"ok": False, "error": t("msg.api.schedule_order")}
     with CTRL.lock:
         if CTRL.automation_thread is not None:
-            return {"ok": False, "error": "自动化运行中，请先停止后再设置定时任务。"}
+            return {"ok": False,
+                    "error": t("msg.api.schedule_while_running")}
     with CTRL.lock:
         CTRL.schedule = {"start": start_dt, "end": end_dt}
         CTRL.phase = "waiting"
         CTRL.stopped_by = None
         CTRL.last_summary = None
     _persist_schedule(start_dt, end_dt)
-    t = threading.Thread(target=_schedule_worker, args=(start_dt, end_dt),
-                         name="hs-scheduler", daemon=True)
-    CTRL.scheduler_thread = t
-    t.start()
+    worker = threading.Thread(target=_schedule_worker, args=(start_dt, end_dt),
+                              name="hs-scheduler", daemon=True)
+    CTRL.scheduler_thread = worker
+    worker.start()
     end_text = f"，{end_dt:%m-%d %H:%M} 结束" if end_dt else "，不设结束时间（运行至手动停止）"
     _log("SYS", f"定时任务已设置：{start_dt:%m-%d %H:%M} 开始{end_text}。")
-    return {"ok": True, "message": "定时任务已设置，请保持本程序运行。"}
+    return {"ok": True, "message": t("msg.api.schedule_set")}
 
 
 def api_calibrate():
     """启动推荐区域校准工具（绿框对齐，无实时 OCR 预览窗）。"""
     script = ROOT / "calibrate_roi.py"
     if not script.exists():
-        return {"ok": False, "error": f"校准工具缺失：{script}"}
+        return {"ok": False, "error": t("msg.api.calibrate_missing", path=script)}
     try:
         subprocess.Popen([sys.executable, str(script)], cwd=str(ROOT))
     except Exception as exc:
-        return {"ok": False, "error": f"启动校准工具失败：{exc}"}
+        return {"ok": False, "error": t("msg.api.calibrate_failed", error=exc)}
     _log("SYS", "已启动推荐区域校准：拖绿框对齐盒子面板，按 S 保存，Esc 退出。")
-    return {"ok": True, "message": "校准工具已启动（无预览：拖绿框对齐盒子面板后按 S 保存，Esc 退出）"}
+    return {"ok": True, "message": t("msg.api.calibrate_started")}
 
 
 def _hearthstone_foreground_guard():
@@ -893,7 +949,7 @@ def _stage_monitor_loop():
         _current_stage = stage
         if stage != last:
             last = stage
-            _log("SYS", f"-----{stage}阶段-----")
+            _log("SYS", t("msg.stage", stage=t(STAGE_KEYS.get(stage, stage))))
         time.sleep(0.3)
 
 
@@ -1116,42 +1172,44 @@ def _overlay_save_account_visible(visible: bool) -> None:
     try:
         from config import save_overlay_setting
         save_overlay_setting("show_account", bool(visible))
-        _log("SYS", "浮窗「账号」行已" + ("显示战网昵称。" if visible
-                                          else "隐藏战网昵称（点眼睛按钮可恢复）。"))
+        _log("SYS", t("msg.overlay.account_shown") if visible
+                    else t("msg.overlay.account_hidden"))
     except Exception as exc:
-        _log("WARN", f"保存浮窗显示偏好失败：{exc}")
+        _log("WARN", t("msg.liveness.save_failed", error=exc))
 
 
 def api_toggle_overlay(body=None):
     """开/关右上角实时日志浮窗。"""
     if log_overlay is None:
-        return {"ok": False, "error": "日志浮窗模块不可用"}
+        return {"ok": False, "error": t("msg.api.overlay_unavailable")}
     if log_overlay.is_running():
         log_overlay.stop()
-        return {"ok": True, "enabled": False, "message": "日志浮窗已关闭"}
+        return {"ok": True, "enabled": False, "message": t("msg.api.overlay_off")}
     _bind_overlay()
-    return {"ok": True, "enabled": True, "message": "日志浮窗已开启"}
+    return {"ok": True, "enabled": True, "message": t("msg.api.overlay_on")}
 
 
 def api_cancel_schedule():
     with CTRL.lock:
         if CTRL.automation_thread is not None:
-            return {"ok": False, "error": "自动化运行中；如需停止请使用停止按钮。"}
+            return {"ok": False, "error": t("msg.api.locked", what=t("msg.what.config"))}
         CTRL.schedule = {"start": None, "end": None}
         CTRL.phase = "idle"
         CTRL.scheduler_thread = None
     _persist_schedule(None, None)
     _log("SYS", "定时任务已取消。")
-    return {"ok": True, "message": "定时任务已取消"}
+    return {"ok": True, "message": t("msg.api.schedule_canceled")}
 
 
 def check_log_dir(path: str):
     path = str(path or "").strip()
     if not path:
-        return {"exists": False, "checked": False, "message": "请先输入日志目录。"}
+        return {"exists": False, "checked": False,
+                "message": t("msg.check.no_path")}
     p = Path(path)
     if not p.is_dir():
-        return {"exists": False, "checked": True, "message": "目录不存在，请检查路径。"}
+        return {"exists": False, "checked": True,
+                "message": t("msg.check.missing")}
     from power_log import find_latest_power_log, find_latest_session_dir
     session = find_latest_session_dir(p)
     plog = find_latest_power_log(p)
@@ -1163,11 +1221,11 @@ def check_log_dir(path: str):
         "power_log_found": plog is not None,
     }
     if plog:
-        result["message"] = "✅ 找到最新对局日志 Power.log"
+        result["message"] = t("msg.check.found")
     elif session:
-        result["message"] = "找到会话目录，暂无 Power.log（进行一局对战后自动生成）"
+        result["message"] = t("msg.check.session_only")
     else:
-        result["message"] = "目录存在，但未发现炉石会话子目录（Hearthstone_时间戳 形式）"
+        result["message"] = t("msg.check.no_session")
     return result
 
 
@@ -1206,7 +1264,8 @@ def status_snapshot():
         "stopped_by": stopped_by,
         "stop_after_game": stop_after,
         "state": state,
-        "state_label": STATE_LABELS.get(state, state or "待机"),
+        "state_label": state_label(state),
+        "lang": i18n.current_language(),
         "in_game": state in ("Choosing Card", "Battling", "Quitting Battle"),
         "games": games,
         "wins": wins,
@@ -1270,6 +1329,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(data)
             elif path == "/api/status":
                 self._json(status_snapshot())
+            elif path == "/api/i18n":
+                self._json({"lang": i18n.current_language(),
+                            "texts": i18n.texts()})
             elif path == "/api/logs":
                 q = parse_qs(parsed.query)
                 try:
@@ -1318,6 +1380,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_save_human_like(body))
             elif path == "/api/liveness":
                 self._json(api_save_liveness(body))
+            elif path == "/api/language":
+                self._json(api_set_language(body))
             elif path == "/api/delays":
                 self._json(api_save_delays(body))
             else:
@@ -1343,10 +1407,10 @@ def _boot_resume_schedule():
         with CTRL.lock:
             CTRL.schedule = {"start": start_dt, "end": end_dt}
             CTRL.phase = "waiting"
-        t = threading.Thread(target=_schedule_worker, args=(start_dt, end_dt),
-                             name="hs-scheduler", daemon=True)
-        CTRL.scheduler_thread = t
-        t.start()
+        worker = threading.Thread(target=_schedule_worker, args=(start_dt, end_dt),
+                                  name="hs-scheduler", daemon=True)
+        CTRL.scheduler_thread = worker
+        worker.start()
         _log("SYS", f"恢复未完成的定时任务：{start_dt:%m-%d %H:%M} 开始。")
     else:
         _persist_schedule(None, None)

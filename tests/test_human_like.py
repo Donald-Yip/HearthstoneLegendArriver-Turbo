@@ -366,5 +366,11 @@ def web_ui_thread():
     return web_ui.CTRL.automation_thread
 
 
+def setUpModule():
+    """这些断言按中文写：先把界面语言钉成中文（用户配置可能是英文）。"""
+    import i18n
+    i18n.set_language("zh")
+
+
 if __name__ == "__main__":
     unittest.main()

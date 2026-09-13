@@ -27,6 +27,7 @@ from src.game_state.recommendation_adapter import adapt_action
 from src.ocr.paddle_adapter import PaddleOcrAdapter
 from src.ocr.stable_reader import StableRecommendationReader
 from src.parser.recommendation_parser import RecommendationParser
+from i18n import t
 from src.recommendation_config import RecommendationConfig
 from src.recommendation_models import ActionKind
 from src.safety.hearthstone_liveness import default_monitor
@@ -686,16 +687,16 @@ def _liveness_detail() -> str:
     """存活告警的旁证：最近一次自动化诊断 + 连续推荐读取失败次数。"""
     parts = []
     if last_automation_diagnostic:
-        parts.append(f"最近自动化诊断：{last_automation_diagnostic}")
+        parts.append(t("msg.liveness.detail.diag", code=last_automation_diagnostic))
     if _ocr_fail_streak:
-        parts.append(f"连续 {_ocr_fail_streak} 次推荐读取失败")
+        parts.append(t("msg.liveness.detail.fails", n=_ocr_fail_streak))
     return "；".join(parts)
 
 
 def _alert_hearthstone_gone(message: str) -> None:
     """判定炉石已退出/无响应：醒目告警并自动停止自动化。"""
     global quitting_flag, _liveness_alert
-    alert = f"⚠️ {message}；自动化已自动停止。请重新启动炉石后再点「开始运行」。"
+    alert = t("msg.liveness.abort", message=message)
     _liveness_alert = alert
     try:
         error_print(alert)
@@ -767,11 +768,7 @@ def check_player_name_match():
     _name_match_reported = key
     if not info["matched"]:
         names = " / ".join(sorted(info["players"].values()))
-        warn_print(
-            f"⚠️ 用户 ID 与日志玩家名不匹配：日志中玩家为 {names}，"
-            f"当前配置为 {info['config']}。若刚换过战网账号，请把网页里的"
-            f"「用户 ID」改成现在的完整战网昵称（含 #编号），否则脚本会把"
-            f"整局都当成对手回合而不出牌。")
+        warn_print(t("msg.name.mismatch", names=names, config=info["config"]))
     return info
 
 

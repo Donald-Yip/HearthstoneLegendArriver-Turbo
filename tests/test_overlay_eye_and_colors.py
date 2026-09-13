@@ -90,7 +90,7 @@ class AccountEyeToggleTests(unittest.TestCase):
 
         self.assertEqual("匹配", row["value"])
         self.assertEqual(log_overlay.MARKER_ON, row["marker"])
-        self.assertEqual(log_overlay._ACCOUNT_HIDDEN_TEXT, row["detail"])
+        self.assertEqual(log_overlay.account_hidden_text(), row["detail"])
         self.assertNotIn("TestUser", row["detail"])
 
     def test_hidden_row_keeps_the_mismatch_warning(self):
@@ -264,6 +264,12 @@ class ButtonLayoutTests(unittest.TestCase):
         self.assertIn("def _place(btn, key)", source)
         for key in log_overlay.BTN_LAYOUT:
             self.assertIn(f'_place({key}_btn, "{key}")', source)
+
+
+def setUpModule():
+    """这些断言按中文写：先把界面语言钉成中文（用户配置可能是英文）。"""
+    import i18n
+    i18n.set_language("zh")
 
 
 if __name__ == "__main__":

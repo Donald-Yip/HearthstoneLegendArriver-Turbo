@@ -130,6 +130,11 @@ input:disabled{opacity:.45;cursor:not-allowed}
 .footer{text-align:center;color:#5c5344;font-size:12px;padding:18px 0 34px}
 a{color:var(--gold-bright);text-decoration:none;border-bottom:1px dashed rgba(247,217,126,.45)}
 a:hover{color:#fff3c9;border-bottom-color:#fff3c9}
+/* ---------- 语言切换（顶栏最右侧，醒目） ---------- */
+.lang-switch{display:flex;align-items:center;gap:2px;padding:3px;border-radius:999px;border:1px solid var(--gold);background:linear-gradient(180deg,rgba(232,185,59,.18),rgba(232,185,59,.06));box-shadow:0 2px 10px rgba(0,0,0,.35)}
+.lang-btn{min-width:46px;padding:5px 10px;border:0;border-radius:999px;background:transparent;color:var(--muted);font-family:"Segoe UI","Microsoft YaHei",sans-serif;font-size:12.5px;font-weight:700;cursor:pointer;transition:all .15s}
+.lang-btn:hover{color:var(--gold-bright)}
+.lang-btn.active{background:linear-gradient(180deg,#f2cd66,#d9a62e);color:#241a05}
 </style>
 </head>
 <body>
@@ -140,10 +145,14 @@ a:hover{color:#fff3c9;border-bottom-color:#fff3c9}
       <div class="logo-icon">🏆</div>
       <div>
         <h1>HSLegendArriver</h1>
-        <p>炉石传说 · 自动对战控制台</p>
+        <p data-i18n="page.subtitle">炉石传说 · 自动对战控制台</p>
       </div>
     </div>
     <div class="header-right">
+      <div id="langSwitch" class="lang-switch" role="group" data-i18n-title="page.lang" title="界面语言">
+        <button type="button" class="lang-btn" data-lang="zh">中文</button>
+        <button type="button" class="lang-btn" data-lang="en">EN</button>
+      </div>
       <div id="statusPill" class="pill idle"><span class="dot"></span><span id="pillText">空闲</span></div>
       <div id="clock" class="clock">--:--:--</div>
     </div>
@@ -153,9 +162,9 @@ a:hover{color:#fff3c9;border-bottom-color:#fff3c9}
 <!-- 开源项目地址：放在最醒目的位置（顶栏正下方通栏） -->
 <div class="repo-bar">
   <div class="repo-bar-inner">
-    <span class="repo-bar-label">📦 本开源项目地址：</span>
+    <span class="repo-bar-label" data-i18n="page.repo.label">📦 本开源项目地址：</span>
     <a class="repo-link" href="https://github.com/magicstrangelzb/HearthstoneLegendArriver" target="_blank" rel="noopener noreferrer">github.com/magicstrangelzb/HearthstoneLegendArriver</a>
-    <span class="repo-bar-note">（GPL-3.0 · 完全免费开源，仅用于技术研究与代码交流；觉得有用欢迎点个 ⭐）</span>
+    <span class="repo-bar-note" data-i18n="page.repo.note">（GPL-3.0 · 完全免费开源，仅用于技术研究与代码交流；觉得有用欢迎点个 ⭐）</span>
   </div>
 </div>
 
@@ -165,54 +174,54 @@ a:hover{color:#fff3c9;border-bottom-color:#fff3c9}
   <div class="main-grid">
 
     <section class="card wide">
-      <h2 class="card-title">📊 运行概览</h2>
+      <h2 class="card-title" data-i18n="page.card.overview">📊 运行概览</h2>
       <div class="stats-grid">
-        <div class="stat"><div class="stat-value" id="stState">待机</div><div class="stat-label">当前状态</div></div>
-        <div class="stat"><div class="stat-value" id="stGames">0</div><div class="stat-label">已完成对局</div></div>
-        <div class="stat"><div class="stat-value" id="stWins">0</div><div class="stat-label">胜场</div></div>
-        <div class="stat"><div class="stat-value" id="stConcede">0</div><div class="stat-label">自动认输</div></div>
-        <div class="stat"><div class="stat-value" id="stRate">--</div><div class="stat-label">胜率</div></div>
+        <div class="stat"><div class="stat-value" id="stState">待机</div><div class="stat-label" data-i18n="page.stat.state">当前状态</div></div>
+        <div class="stat"><div class="stat-value" id="stGames">0</div><div class="stat-label" data-i18n="page.stat.games">已完成对局</div></div>
+        <div class="stat"><div class="stat-value" id="stWins">0</div><div class="stat-label" data-i18n="page.stat.wins">胜场</div></div>
+        <div class="stat"><div class="stat-value" id="stConcede">0</div><div class="stat-label" data-i18n="page.stat.concede">自动认输</div></div>
+        <div class="stat"><div class="stat-value" id="stRate">--</div><div class="stat-label" data-i18n="page.stat.rate">胜率</div></div>
       </div>
       <div class="subrow" id="gameElapsedRow" style="display:none">
-        <span>⏱ 本局已进行 <b id="stElapsed">0:00</b></span>
+        <span><span data-i18n="page.elapsed">⏱ 本局已进行 </span><b id="stElapsed">0:00</b></span>
         <span id="stopNote"></span>
       </div>
     </section>
 
     <section class="card">
-      <h2 class="card-title">👤 基础配置</h2>
+      <h2 class="card-title" data-i18n="page.card.basic">👤 基础配置</h2>
       <label class="field">
-        <span class="field-label">用户 ID（战网完整昵称）</span>
-        <input id="inpName" type="text" placeholder="例如：为所欲为、异灵术#54321">
-        <span class="field-hint">必须与当前战网账号的<b>完整昵称</b>一致（含 <b>#编号</b>）。换了账号务必同步修改：脚本靠昵称区分敌我，不匹配会把整局都当成对手回合而<b>一直不出牌</b>。脚本读到日志玩家名后会自动比对并在下方提示。</span>
+        <span class="field-label" data-i18n="page.basic.name">用户 ID（战网完整昵称）</span>
+        <input id="inpName" type="text" data-i18n-ph="page.basic.name.ph" placeholder="例如：为所欲为、异灵术#54321">
+        <span class="field-hint" data-i18n="page.basic.name.hint">必须与当前战网账号的<b>完整昵称</b>一致（含 <b>#编号</b>）。换了账号务必同步修改：脚本靠昵称区分敌我，不匹配会把整局都当成对手回合而<b>一直不出牌</b>。脚本读到日志玩家名后会自动比对并在下方提示。</span>
       </label>
       <label class="field">
-        <span class="field-label">炉石日志目录（Logs 文件夹）</span>
+        <span class="field-label" data-i18n="page.basic.log">炉石日志目录（Logs 文件夹）</span>
         <div class="input-row">
-          <input id="inpLog" type="text" placeholder="例如：D:HearthstoneLogs">
-          <button id="btnCheckLog" class="btn btn-ghost" type="button">检测</button>
+          <input id="inpLog" type="text" data-i18n-ph="page.basic.log.ph" placeholder="例如：D:HearthstoneLogs">
+          <button id="btnCheckLog" class="btn btn-ghost" type="button" data-i18n="page.basic.check">检测</button>
         </div>
         <span class="field-hint" id="logHint"></span>
       </label>
       <div class="hint-line" id="nameMatch" style="margin-top:2px">账号校验：等待读到对局日志中的玩家名…</div>
-      <div class="hint-line">💡 配置在输入框失焦时自动保存，无需再修改 constants.py；自动化运行期间不可修改。</div>
+      <div class="hint-line" data-i18n="page.basic.save_hint">💡 配置在输入框失焦时自动保存，无需再修改 constants.py；自动化运行期间不可修改。</div>
     </section>
 
     <section class="card">
-      <h2 class="card-title">⏰ 定时任务</h2>
+      <h2 class="card-title" data-i18n="page.card.schedule">⏰ 定时任务</h2>
       <label class="field">
-        <span class="field-label">开始时间</span>
+        <span class="field-label" data-i18n="page.schedule.start">开始时间</span>
         <input id="inpStart" type="datetime-local">
-        <span class="field-hint">不能早于当前时间</span>
+        <span class="field-hint" data-i18n="page.schedule.start.hint">不能早于当前时间</span>
       </label>
       <label class="field">
-        <span class="field-label">结束时间（可选）</span>
+        <span class="field-label" data-i18n="page.schedule.end">结束时间（可选）</span>
         <input id="inpEnd" type="datetime-local">
-        <span class="field-hint">到点后先打完本局对战，再自动停止；留空则一直运行到手动停止</span>
+        <span class="field-hint" data-i18n="page.schedule.end.hint">到点后先打完本局对战，再自动停止；留空则一直运行到手动停止</span>
       </label>
       <div class="btn-row">
-        <button id="btnSchedule" class="btn btn-primary" type="button">💾 保存定时任务</button>
-        <button id="btnCancelSched" class="btn btn-ghost" type="button" disabled>取消计划</button>
+        <button id="btnSchedule" class="btn btn-primary" type="button" data-i18n="page.schedule.save">💾 保存定时任务</button>
+        <button id="btnCancelSched" class="btn btn-ghost" type="button" disabled data-i18n="page.schedule.cancel">取消计划</button>
       </div>
       <div class="countdown-row" id="countdownRow" style="display:none">
         <span class="chip" id="chipStart">距开始 --</span>
@@ -221,151 +230,151 @@ a:hover{color:#fff3c9;border-bottom-color:#fff3c9}
     </section>
 
     <section class="card wide">
-      <h2 class="card-title">🕹️ 对战控制</h2>
+      <h2 class="card-title" data-i18n="page.card.control">🕹️ 对战控制</h2>
       <div class="btn-row big">
-        <button id="btnStart" class="btn btn-primary btn-big" type="button">⚔️ 开始对战</button>
+        <button id="btnStart" class="btn btn-primary btn-big" type="button" data-i18n="page.btn.start">⚔️ 开始对战</button>
         <button id="btnOverlay" class="btn" type="button">🪟 日志浮窗（关）</button>
-        <button id="btnAfterGame" class="btn btn-warn" type="button" disabled>本局结束后停止</button>
-        <button id="btnStopNow" class="btn btn-danger" type="button" disabled>立即停止</button>
+        <button id="btnAfterGame" class="btn btn-warn" type="button" disabled data-i18n="page.btn.after_game">本局结束后停止</button>
+        <button id="btnStopNow" class="btn btn-danger" type="button" disabled data-i18n="page.btn.stop_now">立即停止</button>
       </div>
-      <div class="hint-line">🪄 点 <b>「开始运行」</b>只会打开日志浮窗、把炉石切到前台，<b>不会自动开打</b>；就绪后按钮变为 <b>「开始对战」</b>，再点一次（二次确认后）才真正开始。<br>⌨️ 快捷键 Ctrl+Q 可随时立即停止自动化；请保持炉石与炉石盒子前台可见、分辨率 1920×1080、缩放 100%。<br>🖥️ 炉石请使用 <b>全屏模式</b>（<code>设置 → 选项 → 显示 → 全屏</code>），<b>不要用「最大化窗口」</b>：最大化时窗口坐标与 1920×1080 全屏不一致，硬编码的点击坐标会整体偏移——下随从因有吸附还能成功，法术指定目标则会一直失败重试。</div>
+      <div class="hint-line" data-i18n="page.control.hint">🪄 点 <b>「开始运行」</b>只会打开日志浮窗、把炉石切到前台，<b>不会自动开打</b>；就绪后按钮变为 <b>「开始对战」</b>，再点一次（二次确认后）才真正开始。<br>⌨️ 快捷键 Ctrl+Q 可随时立即停止自动化；请保持炉石与炉石盒子前台可见、分辨率 1920×1080、缩放 100%。<br>🖥️ 炉石请使用 <b>全屏模式</b>（<code>设置 → 选项 → 显示 → 全屏</code>），<b>不要用「最大化窗口」</b>：最大化时窗口坐标与 1920×1080 全屏不一致，硬编码的点击坐标会整体偏移——下随从因有吸附还能成功，法术指定目标则会一直失败重试。</div>
     </section>
 
     <section class="card wide">
-      <h2 class="card-title">🩺 存活检测（挂机防空转）</h2>
+      <h2 class="card-title" data-i18n="page.card.liveness">🩺 存活检测（挂机防空转）</h2>
       <div class="input-row">
         <label class="field" style="flex:none;min-width:90px">
-          <span class="field-label">启用</span>
+          <span class="field-label" data-i18n="page.common.enabled">启用</span>
           <input id="chkLiveness" type="checkbox" style="width:auto;height:22px">
         </label>
         <label class="field">
-          <span class="field-label">日志停滞告警（秒）</span>
+          <span class="field-label" data-i18n="page.liveness.warn">日志停滞告警（秒）</span>
           <input id="inpLvWarn" type="number" min="1" max="3600" step="10">
         </label>
         <label class="field">
-          <span class="field-label">日志停滞自动停止（秒）</span>
+          <span class="field-label" data-i18n="page.liveness.stop">日志停滞自动停止（秒）</span>
           <input id="inpLvStop" type="number" min="1" max="7200" step="10">
         </label>
       </div>
       <div class="btn-row">
-        <button id="btnSaveLiveness" class="btn btn-ghost" type="button">💾 保存存活检测</button>
+        <button id="btnSaveLiveness" class="btn btn-ghost" type="button" data-i18n="page.liveness.save">💾 保存存活检测</button>
       </div>
-      <div class="hint-line">挂机时最怕“炉石已经没了，脚本还在对着失效画面做 OCR”。开启后每个循环都会确认：<b>Hearthstone.exe 进程是否还在</b>（闪退/被关，权威信号），以及<b>对局中 Power.log 是否还在更新</b>（进程还在但游戏卡死）。判定退出会立刻在日志与浮窗<b>醒目告警并自动停止自动化</b>，不会空转到天亮。默认开启；自动化运行中不可修改。</div>
+      <div class="hint-line" data-i18n="page.liveness.hint">挂机时最怕“炉石已经没了，脚本还在对着失效画面做 OCR”。开启后每个循环都会确认：<b>Hearthstone.exe 进程是否还在</b>（闪退/被关，权威信号），以及<b>对局中 Power.log 是否还在更新</b>（进程还在但游戏卡死）。判定退出会立刻在日志与浮窗<b>醒目告警并自动停止自动化</b>，不会空转到天亮。默认开启；自动化运行中不可修改。</div>
       <div class="hint-line" id="livenessStatus" style="margin-top:4px;color:var(--text)">存活状态：等待检测…</div>
     </section>
 
     <section class="card wide">
-      <h2 class="card-title">🏳️ 自动投降</h2>
+      <h2 class="card-title" data-i18n="page.card.concede">🏳️ 自动投降</h2>
       <div class="input-row">
         <label class="field" style="flex:none;min-width:90px">
-          <span class="field-label">启用</span>
+          <span class="field-label" data-i18n="page.common.enabled">启用</span>
           <input id="chkConcede" type="checkbox" style="width:auto;height:22px">
         </label>
         <label class="field">
-          <span class="field-label">AI 胜率阈值（%）</span>
+          <span class="field-label" data-i18n="page.concede.threshold">AI 胜率阈值（%）</span>
           <input id="inpConcedeThreshold" type="number" min="0" max="100" step="0.5">
         </label>
         <label class="field">
-          <span class="field-label">连续回合数</span>
+          <span class="field-label" data-i18n="page.concede.rounds">连续回合数</span>
           <input id="inpConcedeRounds" type="number" min="1" max="50" step="1">
         </label>
       </div>
       <div class="btn-row">
-        <button id="btnSaveConcede" class="btn btn-warn" type="button">💾 保存自动投降</button>
+        <button id="btnSaveConcede" class="btn btn-warn" type="button" data-i18n="page.concede.save">💾 保存自动投降</button>
       </div>
-      <div class="hint-line">检测左上角盒子「AI胜率」，连续 N 回合低于阈值时自动执行：右下角齿轮 → 中间红色「认输」。默认关闭，需手动开启；自动化运行中不可修改。</div>
+      <div class="hint-line" data-i18n="page.concede.hint">检测左上角盒子「AI胜率」，连续 N 回合低于阈值时自动执行：右下角齿轮 → 中间红色「认输」。默认关闭，需手动开启；自动化运行中不可修改。</div>
       <div class="hint-line" id="concedeDetect" style="margin-top:4px;color:var(--text)">检测状态：等待自动化运行…</div>
     </section>
 
     <section class="card wide">
-      <h2 class="card-title">🎭 活人感（可选）</h2>
+      <h2 class="card-title" data-i18n="page.card.humanlike">🎭 活人感（可选）</h2>
       <div class="input-row">
         <label class="field" style="flex:none;min-width:90px">
-          <span class="field-label">启用</span>
+          <span class="field-label" data-i18n="page.common.enabled">启用</span>
           <input id="chkHumanLike" type="checkbox" style="width:auto;height:22px">
         </label>
         <label class="field">
-          <span class="field-label">随机延时下限（秒）</span>
+          <span class="field-label" data-i18n="page.hl.min">随机延时下限（秒）</span>
           <input id="inpHlMin" type="number" min="0" max="60" step="0.1">
         </label>
         <label class="field">
-          <span class="field-label">随机延时上限（秒）</span>
+          <span class="field-label" data-i18n="page.hl.max">随机延时上限（秒）</span>
           <input id="inpHlMax" type="number" min="0" max="60" step="0.1">
         </label>
         <label class="field">
-          <span class="field-label">每处悬停下限（秒）</span>
+          <span class="field-label" data-i18n="page.hl.hover_min">每处悬停下限（秒）</span>
           <input id="inpHlHoverMin" type="number" min="0.05" max="30" step="0.05">
         </label>
         <label class="field">
-          <span class="field-label">每处悬停上限（秒）</span>
+          <span class="field-label" data-i18n="page.hl.hover_max">每处悬停上限（秒）</span>
           <input id="inpHlHoverMax" type="number" min="0.05" max="30" step="0.05">
         </label>
       </div>
       <div class="btn-row">
-        <button id="btnSaveHumanLike" class="btn btn-ghost" type="button">💾 保存活人感</button>
+        <button id="btnSaveHumanLike" class="btn btn-ghost" type="button" data-i18n="page.hl.save">💾 保存活人感</button>
       </div>
-      <div class="hint-line">开启后：每次操作结束不再用固定的「操作后延时」，而是 <b>0.5~3 秒随机延时</b>；延时期间鼠标会在手牌区像真人一样随机悬停（每处 <b>0.2~1 秒随机</b>），最后仍复位到左上角。全程只移动、绝不点击，不影响出牌判定。日志浮窗会显示活人感开/关与投降检测状态，随机延时会显示在浮窗底部进度条上。默认关闭；自动化运行中不可修改，下一局开始时生效。</div>
+      <div class="hint-line" data-i18n="page.hl.hint">开启后：每次操作结束不再用固定的「操作后延时」，而是 <b>0.5~3 秒随机延时</b>；延时期间鼠标会在手牌区像真人一样随机悬停（每处 <b>0.2~1 秒随机</b>），最后仍复位到左上角。全程只移动、绝不点击，不影响出牌判定。日志浮窗会显示活人感开/关与投降检测状态，随机延时会显示在浮窗底部进度条上。默认关闭；自动化运行中不可修改，下一局开始时生效。</div>
     </section>
 
     <section class="card wide">
-      <h2 class="card-title">⏱️ 延时设置</h2>
+      <h2 class="card-title" data-i18n="page.card.delays">⏱️ 延时设置</h2>
       <div class="input-row">
         <label class="field">
-          <span class="field-label">换牌前等待（秒）</span>
+          <span class="field-label" data-i18n="page.delay.ready">换牌前等待（秒）</span>
           <input id="inpReadyDelay" type="number" min="0" max="120" step="0.5">
-          <span class="field-hint">每局进入换牌后先等 N 秒再识图</span>
+          <span class="field-hint" data-i18n="page.delay.ready.hint">每局进入换牌后先等 N 秒再识图</span>
         </label>
         <label class="field">
-          <span class="field-label">识别后缓冲（秒）</span>
+          <span class="field-label" data-i18n="page.delay.post_ocr">识别后缓冲（秒）</span>
           <input id="inpPostOcrDelay" type="number" min="0" max="30" step="0.5">
-          <span class="field-hint">换牌识别成功后到点击的缓冲</span>
+          <span class="field-hint" data-i18n="page.delay.post_ocr.hint">换牌识别成功后到点击的缓冲</span>
         </label>
         <label class="field">
-          <span class="field-label">换牌重试间隔（秒）</span>
+          <span class="field-label" data-i18n="page.delay.retry">换牌重试间隔（秒）</span>
           <input id="inpRetryDelay" type="number" min="0" max="60" step="0.5">
-          <span class="field-hint">面板未就绪/推荐不可执行时每轮重试的等待</span>
+          <span class="field-hint" data-i18n="page.delay.retry.hint">面板未就绪/推荐不可执行时每轮重试的等待</span>
         </label>
         <label class="field">
-          <span class="field-label">每张开局卡延时（秒）</span>
+          <span class="field-label" data-i18n="page.delay.first_card">每张开局卡延时（秒）</span>
           <input id="inpFirstTurnPerCard" type="number" min="0" max="20" step="0.5">
-          <span class="field-hint">检测到一张开局生效全局卡额外追加的秒数</span>
+          <span class="field-hint" data-i18n="page.delay.first_card.hint">检测到一张开局生效全局卡额外追加的秒数</span>
         </label>
         <label class="field">
-          <span class="field-label">每回合前延时（秒）</span>
+          <span class="field-label" data-i18n="page.delay.pre">每回合前延时（秒）</span>
           <input id="inpPreDelay" type="number" min="0" max="60" step="0.5">
-          <span class="field-hint">新回合开始给盒子更新推荐留时间</span>
+          <span class="field-hint" data-i18n="page.delay.pre.hint">新回合开始给盒子更新推荐留时间</span>
         </label>
         <label class="field">
-          <span class="field-label">操作后延时（秒）</span>
+          <span class="field-label" data-i18n="page.delay.post">操作后延时（秒）</span>
           <input id="inpPostDelay" type="number" min="0" max="10" step="0.25">
-          <span class="field-hint">一次操作后到下轮 OCR 的间隔</span>
+          <span class="field-hint" data-i18n="page.delay.post.hint">一次操作后到下轮 OCR 的间隔</span>
         </label>
         <label class="field">
-          <span class="field-label">OCR 缩放</span>
+          <span class="field-label" data-i18n="page.delay.ocr">OCR 缩放</span>
           <input id="inpOcrScale" type="number" min="0.5" max="4" step="0.1">
-          <span class="field-hint">识别精度/速度平衡点</span>
+          <span class="field-hint" data-i18n="page.delay.ocr.hint">识别精度/速度平衡点</span>
         </label>
       </div>
       <div class="btn-row">
-        <button id="btnSaveDelays" class="btn btn-ghost" type="button">💾 保存延时</button>
+        <button id="btnSaveDelays" class="btn btn-ghost" type="button" data-i18n="page.delay.save">💾 保存延时</button>
       </div>
-      <div class="hint-line" id="delayHint">当前时序由服务端配置返回，见下方保存后刷新。</div>
+      <div class="hint-line" id="delayHint" data-i18n="page.delay.loading">当前时序由服务端配置返回，见下方保存后刷新。</div>
     </section>
 
     <section class="card wide">
-      <h2 class="card-title">🎯 校准推荐区域</h2>
+      <h2 class="card-title" data-i18n="page.card.calibrate">🎯 校准推荐区域</h2>
       <div class="btn-row">
-        <button id="btnCalibrate" class="btn btn-ghost" type="button">📐 显示校准框</button>
+        <button id="btnCalibrate" class="btn btn-ghost" type="button" data-i18n="page.calibrate.btn">📐 显示校准框</button>
       </div>
-      <div class="hint-line">对战中启动：屏幕显示绿框（= 程序截图区域）+ 右侧实时 OCR 预览。拖动绿框使盒子的「打法参考A」面板对齐，识别到后点 [保存]（写入即生效，不覆盖名字/日志目录），Esc 退出。</div>
+      <div class="hint-line" data-i18n="page.calibrate.hint">对战中启动：屏幕显示绿框（= 程序截图区域）+ 右侧实时 OCR 预览。拖动绿框使盒子的「打法参考A」面板对齐，识别到后点 [保存]（写入即生效，不覆盖名字/日志目录），Esc 退出。</div>
     </section>
 
     <section class="card wide">
       <h2 class="card-title">
-        <span>📜 实时日志</span>
+        <span data-i18n="page.card.log">📜 实时日志</span>
         <span style="display:flex;gap:10px;align-items:center">
-          <label class="autoscroll"><input type="checkbox" id="chkAutoscroll" checked>自动滚动</label>
-          <button id="btnClearLog" class="btn btn-ghost btn-small" type="button">清空</button>
+          <label class="autoscroll"><input type="checkbox" id="chkAutoscroll" checked><span data-i18n="page.log.autoscroll">自动滚动</span></label>
+          <button id="btnClearLog" class="btn btn-ghost btn-small" type="button" data-i18n="page.log.clear">清空</button>
         </span>
       </h2>
       <div id="logBox" class="log-box"></div>
@@ -373,7 +382,7 @@ a:hover{color:#fff3c9;border-bottom-color:#fff3c9}
 
   </div>
 
-  <div class="footer">HSLegendArriver · 仅用于技术研究与代码交流 · <a href="https://github.com/magicstrangelzb/HearthstoneLegendArriver" target="_blank" rel="noopener noreferrer">github.com/magicstrangelzb/HearthstoneLegendArriver</a></div>
+  <div class="footer"><span data-i18n="page.footer">HSLegendArriver · 仅用于技术研究与代码交流 · </span><a href="https://github.com/magicstrangelzb/HearthstoneLegendArriver" target="_blank" rel="noopener noreferrer">github.com/magicstrangelzb/HearthstoneLegendArriver</a></div>
 </div>
 
 <div id="toasts"></div>
@@ -386,21 +395,82 @@ function $(id){ return document.getElementById(id); }
 function post(path, body){
   return fetch(path, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body||{})})
     .then(function(r){ return r.json(); })
-    .catch(function(e){ return {ok:false, error:"网络错误：" + e.message}; });
+    .catch(function(e){ return {ok:false, error: t("page.toast.network", {msg:e.message})}; });
 }
 function get(path){
   return fetch(path)
     .then(function(r){ return r.json(); })
-    .catch(function(e){ return {ok:false, error:"网络错误：" + e.message}; });
+    .catch(function(e){ return {ok:false, error: t("page.toast.network", {msg:e.message})}; });
+}
+
+/* ---------- 多语言 ----------
+   文案唯一来源是 Python 的 i18n.py（键名 + zh/en），页面启动时从 /api/i18n
+   取一次，切换语言时用 /api/language 的返回值重绘。
+   新增界面文案时：i18n.py 里加键（中英都要）→ 这里或 HTML 里用 data-i18n/t()。 */
+var I18N = {};
+var LANG = "zh";
+
+function t(key, vars){
+  var text = (I18N[key] !== undefined) ? I18N[key] : key;
+  if (vars){
+    for (var k in vars){
+      text = text.split("{" + k + "}").join(vars[k]);
+    }
+  }
+  return text;
+}
+
+function applyI18n(){
+  var nodes = document.querySelectorAll("[data-i18n]");
+  for (var i = 0; i < nodes.length; i++){
+    nodes[i].innerHTML = t(nodes[i].getAttribute("data-i18n"));
+  }
+  var holders = document.querySelectorAll("[data-i18n-ph]");
+  for (var j = 0; j < holders.length; j++){
+    holders[j].setAttribute("placeholder", t(holders[j].getAttribute("data-i18n-ph")));
+  }
+  var titles = document.querySelectorAll("[data-i18n-title]");
+  for (var m = 0; m < titles.length; m++){
+    titles[m].setAttribute("title", t(titles[m].getAttribute("data-i18n-title")));
+  }
+  var btns = document.querySelectorAll("#langSwitch .lang-btn");
+  for (var n = 0; n < btns.length; n++){
+    btns[n].className = "lang-btn" + (btns[n].getAttribute("data-lang") === LANG ? " active" : "");
+  }
+}
+
+function useLanguage(lang, texts){
+  LANG = lang || "zh";
+  I18N = texts || {};
+  applyI18n();
+  if (lastStatus) render(lastStatus);
+}
+
+function loadLanguage(callback){
+  get("/api/i18n").then(function(r){
+    if (r && r.texts) useLanguage(r.lang, r.texts);
+    if (callback) callback();
+  });
+}
+
+function switchLanguage(lang){
+  post("/api/language", {lang: lang}).then(function(r){
+    if (r.ok){
+      useLanguage(r.lang, r.texts);
+      toast(r.message, "ok");
+    } else {
+      toast(r.error || t("page.toast.op_failed"), "error");
+    }
+  });
 }
 
 /* ---------- Toast ---------- */
 function toast(msg, kind){
-  var t = document.createElement("div");
-  t.className = "toast " + (kind || "info");
-  t.textContent = msg;
-  $("toasts").appendChild(t);
-  setTimeout(function(){ t.classList.add("out"); setTimeout(function(){ t.remove(); }, 450); }, 3800);
+  var box = document.createElement("div");
+  box.className = "toast " + (kind || "info");
+  box.textContent = msg;
+  $("toasts").appendChild(box);
+  setTimeout(function(){ box.classList.add("out"); setTimeout(function(){ box.remove(); }, 450); }, 3800);
 }
 
 /* ---------- 时间工具 ---------- */
@@ -418,13 +488,14 @@ function parseLocal(iso){
 function fmtCountdown(targetMs){
   if (targetMs === null) return "--";
   var diff = targetMs - Date.now();
-  if (diff <= 0) return "已到点";
+  if (diff <= 0) return t("page.countdown.now");
   return fmtDur(diff / 1000);
 }
 
 /* ---------- 全局状态 ---------- */
 var lastStatus = null;
 var logSeq = 0;
+var overlayOn = false;
 var dirty = {name:false, log:false};
 var dirtyConcede = false;
 var dirtyDelays = false;
@@ -432,11 +503,11 @@ var dirtyHumanLike = false;
 var dirtyLiveness = false;
 
 var PHASE_INFO = {
-  idle:     {label:"空闲",            cls:"idle"},
-  waiting:  {label:"等待定时启动",     cls:"waiting"},
-  playing:  {label:"自动化运行中",     cls:"playing"},
-  stopping: {label:"本局结束后停止",   cls:"stopping"},
-  finished: {label:"计划已完成",       cls:"finished"}
+  idle:     {key:"page.phase.idle",     cls:"idle"},
+  waiting:  {key:"page.phase.waiting",  cls:"waiting"},
+  playing:  {key:"page.phase.playing",  cls:"playing"},
+  stopping: {key:"page.phase.stopping", cls:"stopping"},
+  finished: {key:"page.phase.finished", cls:"finished"}
 };
 
 function esc(s){
@@ -449,7 +520,7 @@ function renderBanners(s){
   var box = $("banners");
   var html = "";
   if (!s.is_admin){
-    html += '<div class="banner banner-warn"><span>⚠️</span><div>当前未以<b>管理员权限</b>运行，自动化鼠标/键盘操作可能失效。<br>请关闭本窗口，在<b>管理员命令提示符</b>中运行：<b>python web_ui.py</b></div></div>';
+    html += '<div class="banner banner-warn"><span>⚠️</span><div>' + t("page.banner.not_admin") + '</div></div>';
   }
   if (s.last_error){
     html += '<div class="banner banner-err"><span>❌</span><div>' + esc(s.last_error) + '</div></div>';
@@ -463,13 +534,15 @@ function renderBanners(s){
   if (nm && nm.matched === false){
     var nmNames = [];
     for (var k in (nm.players || {})) nmNames.push(nm.players[k]);
-    html += '<div class="banner banner-warn"><span>🪪</span><div>用户 ID 与日志玩家名<b>不匹配</b>：日志中玩家为 <b>'
-         + esc(nmNames.join(" / ")) + '</b>，当前配置为 <b>' + esc(nm.config || "(空)")
-         + '</b>。<br>请把「用户 ID」改成现在的<b>完整战网昵称（含 #编号）</b>，否则脚本会把整局都当成对手回合而<b>不出牌</b>。</div></div>';
+    html += '<div class="banner banner-warn"><span>🪪</span><div>'
+         + t("page.banner.mismatch", {names: esc(nmNames.join(" / ")),
+                                      config: esc(nm.config || t("page.empty"))})
+         + '</div></div>';
   }
   if (s.phase === "finished" && s.last_summary){
     var sm = s.last_summary;
-    html += '<div class="banner banner-ok"><span>✅</span><div>定时任务完成：本局对战结束后已自动停止。<b>共完成 ' + sm.games + ' 场对战，赢 ' + sm.wins + ' 场</b>。可再次开始对战或设置新的定时任务。</div></div>';
+    html += '<div class="banner banner-ok"><span>✅</span><div>'
+         + t("page.banner.schedule_done", {games: sm.games, wins: sm.wins}) + '</div></div>';
   }
   box.innerHTML = html;
 }
@@ -481,18 +554,19 @@ function render(s){
   var info = PHASE_INFO[s.phase] || PHASE_INFO.idle;
   var pill = $("statusPill");
   pill.className = "pill " + info.cls;
-  var pillText = s.starting ? "启动中…" : info.label;
+  var pillText = s.starting ? t("page.starting") : t(info.key);
   if (s.running && s.state) pillText += " · " + s.state_label;
   $("pillText").textContent = pillText;
 
-  $("stState").textContent = s.starting ? "启动中…" : (s.running ? s.state_label : (s.phase === "waiting" ? "等待定时启动" : (s.phase === "finished" ? "计划已完成" : "待机")));
+  $("stState").textContent = s.starting ? t("page.starting") : (s.running ? s.state_label : (s.phase === "waiting" ? t("page.phase.waiting") : (s.phase === "finished" ? t("page.phase.finished") : t("page.idle.text"))));
   $("stGames").textContent = s.games;
   $("stWins").textContent = s.wins;
   $("stConcede").textContent = s.concede_count || 0;
   $("stRate").textContent = s.games > 0 ? s.win_rate + "%" : "--";
 
   $("btnStart").disabled = busy;
-  if (!s.starting) $("btnStart").textContent = s.prepared ? "⚔️ 开始对战" : "🪄 开始运行（准备）";
+  if (!s.starting) $("btnStart").textContent = s.prepared ? t("page.btn.start") : t("page.btn.prepare");
+  $("btnOverlay").textContent = t("page.btn.overlay", {state: overlayOn ? t("page.on") : t("page.off")});
   $("btnAfterGame").disabled = !running || s.stop_after_game;
   $("btnStopNow").disabled = !running;
   $("btnSchedule").disabled = busy;
@@ -531,18 +605,22 @@ function render(s){
   if (cd){
     var det;
     if (!cd.enabled){
-      det = "检测状态：已关闭";
+      det = t("page.concede.status.disabled");
     } else if (cd.triggered){
-      det = "检测状态：已触发认输（连续 " + cd.streak + "/" + cd.rounds + " 回合）";
+      det = t("page.concede.status.triggered", {streak: cd.streak, rounds: cd.rounds});
     } else {
-      var turnTxt = cd.checked_turn ? " · 最近检测：第 " + cd.checked_turn + " 回合" : "";
+      var turnTxt = cd.checked_turn
+        ? t("page.concede.turn_text", {turn: cd.checked_turn}) : "";
       if (cd.rate === null || cd.rate === undefined){
-        det = "检测状态：该回合未读到 AI胜率（连续 " + cd.streak + "/" + cd.rounds + " 回合）" + turnTxt;
+        det = t("page.concede.status.no_rate",
+                {streak: cd.streak, rounds: cd.rounds, turn_text: turnTxt});
       } else {
         var low = cd.rate < cd.threshold;
-        det = "检测状态：AI胜率 " + Number(cd.rate).toFixed(1) + "%"
-            + "（阈值 " + cd.threshold + "%，连续 " + cd.streak + "/" + cd.rounds + " 回合）"
-            + (low ? " ⚠️ 低于阈值" : " ✅ 未低于阈值") + turnTxt;
+        det = t("page.concede.status.rate", {
+                rate: Number(cd.rate).toFixed(1), threshold: cd.threshold,
+                streak: cd.streak, rounds: cd.rounds,
+                mark_text: low ? t("page.concede.below") : t("page.concede.above"),
+                turn_text: turnTxt});
       }
     }
     $("concedeDetect").textContent = det;
@@ -559,26 +637,25 @@ function render(s){
     $("inpLvStop").value = s.liveness.log_stale_stop_seconds;
   }
   if (s.liveness){
-    var lv = s.liveness, lvTxt;
+    var lv = s.liveness, lvTxt, lvAge = Math.round(lv.log_age || 0);
     if (!lv.enabled){
-      lvTxt = "存活状态：已关闭（不会检测炉石是否还在运行）";
+      lvTxt = t("page.liveness.status.disabled");
     } else if (lv.status === "gone"){
-      lvTxt = "存活状态：❌ 炉石已退出（Hearthstone.exe 进程消失）";
+      lvTxt = t("page.liveness.status.gone");
     } else if (lv.status === "stale"){
-      lvTxt = "存活状态：❌ 炉石疑似无响应（对局中 Power.log 停滞 " + Math.round(lv.log_age || 0) + "s）";
+      lvTxt = t("page.liveness.status.stale", {age: lvAge});
     } else if (lv.status === "warning"){
-      lvTxt = "存活状态：⚠️ 对局中 Power.log 已停滞 " + Math.round(lv.log_age || 0) + "s（超过 "
-            + lv.log_stale_stop_seconds + "s 将自动停止）";
+      lvTxt = t("page.liveness.status.warning",
+                {age: lvAge, stop: lv.log_stale_stop_seconds});
     } else if (lv.status === "idle"){
-      lvTxt = "存活状态：炉石未运行（点「开始运行」会先拉起战网/炉石）";
+      lvTxt = t("page.liveness.status.idle");
     } else if (lv.status === "ok"){
-      lvTxt = "存活状态：✅ 炉石正在运行"
-            + (lv.in_game && lv.log_age !== null && lv.log_age !== undefined
-               ? "（Power.log " + Math.round(lv.log_age) + "s 前更新）" : "")
-            + "；判定退出阈值：" + lv.log_stale_warn_seconds + "s 告警 / "
-            + lv.log_stale_stop_seconds + "s 自动停止";
+      lvTxt = t("page.liveness.status.ok", {
+        age_text: (lv.in_game && lv.log_age !== null && lv.log_age !== undefined
+                   ? t("page.liveness.age", {age: lvAge}) : ""),
+        warn: lv.log_stale_warn_seconds, stop: lv.log_stale_stop_seconds});
     } else {
-      lvTxt = "存活状态：无法判定（进程列表读取失败）";
+      lvTxt = t("page.liveness.status.unknown");
     }
     $("livenessStatus").textContent = lvTxt;
   }
@@ -586,17 +663,19 @@ function render(s){
   /* 账号昵称校验 */
   var nm = s.name_match;
   if (nm){
+    var nmNames = [];
+    for (var pid in (nm.players || {})) nmNames.push(nm.players[pid]);
     if (nm.matched === true){
-      $("nameMatch").textContent = "账号校验：✅ 日志玩家名与配置一致（" + nm.config + "）";
+      $("nameMatch").textContent = t("page.namecheck.ok", {config: nm.config});
       $("nameMatch").style.color = "var(--green)";
     } else if (nm.matched === false){
-      var names = [];
-      for (var pid in (nm.players || {})) names.push(nm.players[pid]);
-      $("nameMatch").textContent = "账号校验：❌ 不匹配！日志中玩家为 " + names.join(" / ")
-        + "，当前配置为 " + (nm.config || "(空)") + " —— 请改成完整战网昵称（含 #编号），否则整局不出牌";
+      $("nameMatch").textContent = t("page.namecheck.bad", {
+        names: nmNames.join(" / "),
+        config: nm.config || t("page.none")});
       $("nameMatch").style.color = "var(--red)";
     } else {
-      $("nameMatch").textContent = "账号校验：等待读到对局日志中的玩家名…（配置：" + (nm.config || "空") + "）";
+      $("nameMatch").textContent = t("page.namecheck.waiting",
+        {config: nm.config || t("page.none")});
       $("nameMatch").style.color = "var(--muted)";
     }
   }
@@ -615,15 +694,14 @@ function render(s){
   /* 延时设置说明：动态取自服务端当前配置，不硬编码 */
   if (s.delays){
     var d = s.delays;
-    $("delayHint").textContent =
-      "当前时序：换牌前 " + d.mulligan_ready_delay_seconds + "s / " +
-      "识别后 " + d.mulligan_post_ocr_delay_seconds + "s / " +
-      "换牌重试 " + d.mulligan_retry_delay_seconds + "s / " +
-      "每张开局卡 " + d.first_turn_per_card_delay_seconds + "s / " +
-      "回合前 " + d.pre_action_delay_seconds + "s / " +
-      "操作后 " + d.post_action_delay_seconds + "s / " +
-      "OCR " + d.ocr_preprocess_scale + "。" +
-      "写入 ui_config.json 的 delays 段即时生效（下次开局/下回合读取）；自动化运行中不可修改。";
+    $("delayHint").textContent = t("page.delay.summary", {
+      ready: d.mulligan_ready_delay_seconds,
+      post_ocr: d.mulligan_post_ocr_delay_seconds,
+      retry: d.mulligan_retry_delay_seconds,
+      first_card: d.first_turn_per_card_delay_seconds,
+      pre: d.pre_action_delay_seconds,
+      post: d.post_action_delay_seconds,
+      ocr: d.ocr_preprocess_scale});
   }
 
   /* 倒计时芯片 */
@@ -631,18 +709,20 @@ function render(s){
   var showChips = false;
   if (s.phase === "waiting" && s.schedule_start){
     showChips = true;
-    chipS.textContent = "距开始 " + fmtCountdown(parseLocal(s.schedule_start));
+    chipS.textContent = t("page.chip.start", {time: fmtCountdown(parseLocal(s.schedule_start))});
     if (s.schedule_end){
       chipE.style.display = "";
-      chipE.textContent = "距结束 " + fmtCountdown(parseLocal(s.schedule_end));
+      chipE.textContent = t("page.chip.end", {time: fmtCountdown(parseLocal(s.schedule_end))});
     } else {
       chipE.style.display = "none";
     }
   } else if (running && s.schedule_end){
     showChips = true;
-    chipS.textContent = s.phase === "stopping" ? "计划结束时间已到" : "计划运行中";
+    chipS.textContent = s.phase === "stopping" ? t("page.chip.end_reached") : t("page.chip.plan_running");
     chipE.style.display = "";
-    chipE.textContent = s.phase === "stopping" ? "等待本局对战打完…" : "距结束 " + fmtCountdown(parseLocal(s.schedule_end));
+    chipE.textContent = s.phase === "stopping"
+      ? t("page.chip.wait_game")
+      : t("page.chip.end", {time: fmtCountdown(parseLocal(s.schedule_end))});
   }
   cr.style.display = showChips ? "" : "none";
 
@@ -650,7 +730,7 @@ function render(s){
   var er = $("gameElapsedRow");
   if (s.in_game){
     er.style.display = "";
-    $("stopNote").textContent = s.stop_after_game ? "🔶 本局结束后将自动停止" : "";
+    $("stopNote").textContent = s.stop_after_game ? t("page.stop_note") : "";
   } else {
     er.style.display = "none";
   }
@@ -717,11 +797,11 @@ function saveConfig(){
   post("/api/config", {name:$("inpName").value.trim(), log_root:$("inpLog").value.trim()})
     .then(function(r){
       if (r.ok){
-        toast(r.message || "配置已保存", "ok");
+        toast(r.message || t("page.toast.saved"), "ok");
         (r.warnings || []).forEach(function(w){ toast(w, "warn"); });
         dirty.name = false; dirty.log = false;
       } else {
-        toast(r.error || "保存失败", "error");
+        toast(r.error || t("page.toast.save_failed"), "error");
       }
     });
 }
@@ -733,7 +813,7 @@ $("inpLog").addEventListener("keydown", function(e){ if (e.key === "Enter") this
 $("btnCheckLog").addEventListener("click", function(){
   var hint = $("logHint");
   hint.className = "field-hint";
-  hint.textContent = "检测中…";
+  hint.textContent = t("page.basic.checking");
   get("/api/check_log?path=" + encodeURIComponent($("inpLog").value.trim()))
     .then(function(r){
       if (!r.checked){
@@ -742,7 +822,7 @@ $("btnCheckLog").addEventListener("click", function(){
         return;
       }
       hint.className = "field-hint " + (r.power_log_found || r.session ? "ok" : "bad");
-      hint.textContent = r.message + (r.power_log ? "（" + r.power_log + "）" : "");
+      hint.textContent = r.message + (r.power_log ? "  " + r.power_log : "");
     });
 });
 
@@ -759,17 +839,17 @@ $("inpStart").addEventListener("change", function(){ $("inpEnd").min = this.valu
 $("btnSchedule").addEventListener("click", function(){
   var start = $("inpStart").value;
   var end = $("inpEnd").value;
-  if (!start){ toast("请选择开始时间", "error"); return; }
+  if (!start){ toast(t("page.toast.pick_start"), "error"); return; }
   post("/api/schedule", {start:start, end:end}).then(function(r){
     if (r.ok) toast(r.message, "ok");
-    else toast(r.error || "设置失败", "error");
+    else toast(r.error || t("page.toast.sched_failed"), "error");
   });
 });
 
 $("btnCancelSched").addEventListener("click", function(){
   post("/api/schedule/cancel", {}).then(function(r){
     if (r.ok) toast(r.message, "ok");
-    else toast(r.error || "取消失败", "error");
+    else toast(r.error || t("page.toast.cancel_failed"), "error");
   });
 });
 
@@ -777,7 +857,7 @@ $("btnCancelSched").addEventListener("click", function(){
 $("btnCalibrate").addEventListener("click", function(){
   post("/api/calibrate", {}).then(function(r){
     if (r.ok) toast(r.message, "ok");
-    else toast(r.error || "启动校准时失败", "error");
+    else toast(r.error || t("page.toast.op_failed"), "error");
   });
 });
 
@@ -786,10 +866,11 @@ $("btnOverlay").addEventListener("click", function(){
   var btn = $("btnOverlay");
   post("/api/overlay", {}).then(function(r){
     if (r.ok) {
-      toast(r.message || (r.enabled ? "日志浮窗已开启" : "日志浮窗已关闭"), "ok");
-      btn.textContent = "🪟 日志浮窗（" + (r.enabled ? "开" : "关") + "）";
+      overlayOn = !!r.enabled;
+      toast(r.message || t(overlayOn ? "msg.api.overlay_on" : "msg.api.overlay_off"), "ok");
+      btn.textContent = t("page.btn.overlay", {state: overlayOn ? t("page.on") : t("page.off")});
     } else {
-      toast(r.error || "切换失败", "error");
+      toast(r.error || t("page.toast.op_failed"), "error");
     }
   });
 });
@@ -799,35 +880,35 @@ $("btnStart").addEventListener("click", function(){
   var prepared = !!(lastStatus && lastStatus.prepared);
   var go = function(){
     $("btnStart").disabled = true;
-    $("btnStart").textContent = prepared ? "启动中…" : "准备中…";
+    $("btnStart").textContent = prepared ? t("page.starting") : t("page.btn.prepare");
     post(prepared ? "/api/start" : "/api/prepare", {}).then(function(r){
       if (r.ok) toast(r.message, "ok");
-      else { toast(r.error || "操作失败", "error"); $("btnStart").disabled = false; }
+      else { toast(r.error || t("page.toast.op_failed"), "error"); $("btnStart").disabled = false; }
     });
   };
   if (!prepared){ go(); return; }
   if (lastStatus && lastStatus.phase === "waiting"){
-    if (!confirm("当前有定时任务，立即开始对战将取消定时任务。确定继续？")) return;
-  } else if (!confirm("已就绪：确定开始自动对战？（脚本会开始匹配并自动打牌）")) {
+    if (!confirm(t("page.confirm.start_schedule"))) return;
+  } else if (!confirm(t("page.confirm.start"))) {
     return;
   }
   go();
 });
 
 $("btnAfterGame").addEventListener("click", function(){
-  if (confirm("确定在本局对战结束后停止自动化？")){
+  if (confirm(t("page.confirm.after_game"))){
     post("/api/stop", {mode:"after_game"}).then(function(r){
       if (r.ok) toast(r.message, "ok");
-      else toast(r.error || "操作失败", "error");
+      else toast(r.error || t("page.toast.op_failed"), "error");
     });
   }
 });
 
 $("btnStopNow").addEventListener("click", function(){
-  if (confirm("确定立即停止自动化？（当前对局会被中断）")){
+  if (confirm(t("page.confirm.stop_now"))){
     post("/api/stop", {mode:"now"}).then(function(r){
       if (r.ok) toast(r.message, "ok");
-      else toast(r.error || "操作失败", "error");
+      else toast(r.error || t("page.toast.op_failed"), "error");
     });
   }
 });
@@ -847,7 +928,7 @@ $("btnSaveConcede").addEventListener("click", function(){
       toast(r.message, "ok");
       dirtyConcede = false;
     } else {
-      toast(r.error || "保存失败", "error");
+      toast(r.error || t("page.toast.save_failed"), "error");
     }
   });
 });
@@ -870,7 +951,7 @@ $("btnSaveHumanLike").addEventListener("click", function(){
       toast(r.message, "ok");
       dirtyHumanLike = false;
     } else {
-      toast(r.error || "保存失败", "error");
+      toast(r.error || t("page.toast.save_failed"), "error");
     }
   });
 });
@@ -891,7 +972,7 @@ $("btnSaveLiveness").addEventListener("click", function(){
       toast(r.message, "ok");
       dirtyLiveness = false;
     } else {
-      toast(r.error || "保存失败", "error");
+      toast(r.error || t("page.toast.save_failed"), "error");
     }
   });
 });
@@ -911,18 +992,33 @@ $("btnSaveDelays").addEventListener("click", function(){
       toast(r.message, "ok");
       dirtyDelays = false;
     } else {
-      toast(r.error || "保存失败", "error");
+      toast(r.error || t("page.toast.save_failed"), "error");
     }
   });
 });
 
+/* ---------- 语言切换 ---------- */
+(function(){
+  var btns = document.querySelectorAll("#langSwitch .lang-btn");
+  for (var i = 0; i < btns.length; i++){
+    btns[i].addEventListener("click", function(){
+      var lang = this.getAttribute("data-lang");
+      if (lang && lang !== LANG) switchLanguage(lang);
+    });
+  }
+})();
+
 /* ---------- 启动 ---------- */
-refreshStatus();
-refreshLogs();
-refreshClock();
-setInterval(refreshStatus, 1000);
-setInterval(refreshLogs, 1500);
-setInterval(refreshClock, 1000);
+/* 先取一次当前语言的文案（首次进入时语言由服务端 ui_config.json 决定），
+   再开始轮询，避免页面先闪一下中文。 */
+loadLanguage(function(){
+  refreshStatus();
+  refreshLogs();
+  refreshClock();
+  setInterval(refreshStatus, 1000);
+  setInterval(refreshLogs, 1500);
+  setInterval(refreshClock, 1000);
+});
 </script>
 </body>
 </html>

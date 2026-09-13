@@ -21,6 +21,8 @@ import threading
 import time
 from collections import deque
 
+from i18n import t
+
 _LOCK = threading.Lock()
 _LINES: deque = deque(maxlen=2000)
 _STARTED = [False]
@@ -44,11 +46,21 @@ DISABLED = "#394050"
 # 单独提出来是为了可测/可调（截图脚本会临时设为 1.0 以免把桌面图标叠进图里）。
 ALPHA = 0.94
 
+# 浮窗尺寸（宽 × 高）。宽度要放得下最长语言的状态面板（英文比中文长），
+# tests/test_i18n.py 会实测面板需求宽度并断言不超过它。
+WINDOW_WIDTH = 340
+WINDOW_HEIGHT = 600
+
 # 状态面板右侧“说明”列最多显示多少个字符：列宽固定，太长会被窗口边缘裁掉，
 # 宁可截断加省略号（完整内容在网页/日志里都能看到）。
 _DETAIL_LIMIT = 16
-# 点了眼睛按钮后「账号」行显示的文字（隐藏昵称，保留匹配与否）。
-_ACCOUNT_HIDDEN_TEXT = "已隐藏"
+# 点了眼睛按钮后「账号」行显示的文字（隐藏昵称，保留匹配与否）。文案见 i18n。
+_ACCOUNT_HIDDEN_KEY = "ov.account.hidden"
+
+
+def account_hidden_text() -> str:
+    """「账号」行隐藏昵称时显示的文案（跟随界面语言）。"""
+    return t(_ACCOUNT_HIDDEN_KEY)
 # 眼睛按钮：同一个图标，靠颜色区分状态（不加叉号，更干净）。
 #   绿色 = 正在显示账号昵称；白色 = 已隐藏账号昵称。
 EYE_ICON = "👁"
@@ -72,7 +84,7 @@ BTN_SPAN = {"stop_after": 2}
 
 # 浮窗顶部品牌行：本项目大名 + 一行小字副标题（放在“自动化日志”标题之前）。
 BRAND_NAME = "HSLegendArriver"
-BRAND_SUB = "炉石传说 · 自动对战"
+BRAND_SUB = "炉石传说 · 自动对战"  # 文案见 i18n: ov.brand.sub
 # 状态圆点：功能开着 = 绿，关着 = 红，状态未知 = 灰。
 MARKER_ON = GREEN
 MARKER_OFF = DANGER
@@ -135,8 +147,10 @@ _DELAY = None
 _MAX_LINES = 500
 # 完整正文日志缓存：不做行数丢弃，供“保存日志”写出全部历史。
 _FULL_LINES = []
-_delay_start_re = re.compile(r"(?:延时|等待)\s*(\d+(?:\.\d+)?)\s*s?\s*后")
-_delay_end_markers = ("延时结束", "延时完毕")
+# 延时进度条识别的字样：中英都认（文案在 i18n 里，解析不能只认中文）。
+_delay_start_re = re.compile(
+    r"(?:延时|等待|delay|wait)\s*(\d+(?:\.\d+)?)\s*s?\s*(?:后|after)", re.I)
+_delay_end_markers = ("延时结束", "延时完毕", "delay finished", "delay over")
 
 
 def _delay_desc(line: str) -> str:
@@ -278,18 +292,19 @@ def human_like_row(info) -> dict:
     "hover_min", "hover_max"}；None / 取不到时显示“—”，表示无法确认。
     """
     if info is None:
-        return {"marker": MARKER_UNKNOWN, "value": "—", "value_color": DIM,
-                "detail": ""}
+        return {"marker": MARKER_UNKNOWN, "value": t("ov.value.unknown"),
+                "value_color": DIM, "detail": ""}
     if not info.get("enabled"):
-        return {"marker": MARKER_OFF, "value": "关", "value_color": DIM,
-                "detail": ""}
+        return {"marker": MARKER_OFF, "value": t("ov.value.off"),
+                "value_color": DIM, "detail": ""}
     lo, hi = info.get("post_delay_min"), info.get("post_delay_max")
     h_lo, h_hi = info.get("hover_min"), info.get("hover_max")
-    detail = f"{lo:g}~{hi:g}s" if lo is not None and hi is not None else ""
-    if h_lo is not None and h_hi is not None:
-        detail += (" · " if detail else "") + f"悬停 {h_lo:g}~{h_hi:g}s"
-    return {"marker": MARKER_ON, "value": "开", "value_color": GREEN,
-            "detail": detail}
+    detail = ""
+    if None not in (lo, hi, h_lo, h_hi):
+        detail = t("ov.hl.detail", lo=f"{lo:g}", hi=f"{hi:g}",
+                   h_lo=f"{h_lo:g}", h_hi=f"{h_hi:g}")
+    return {"marker": MARKER_ON, "value": t("ov.value.on"),
+            "value_color": GREEN, "detail": detail}
 
 
 def concede_detect_row(info) -> dict:
@@ -299,30 +314,36 @@ def concede_detect_row(info) -> dict:
     "checked_turn", "triggered"}；rate=None 表示该回合没读到胜率。
     """
     if info is None:
-        return {"marker": MARKER_UNKNOWN, "value": "—", "value_color": DIM,
-                "detail": ""}
+        return {"marker": MARKER_UNKNOWN, "value": t("ov.value.unknown"),
+                "value_color": DIM, "detail": ""}
     if not info.get("enabled"):
-        return {"marker": MARKER_OFF, "value": "关", "value_color": DIM,
-                "detail": ""}
+        return {"marker": MARKER_OFF, "value": t("ov.value.off"),
+                "value_color": DIM, "detail": ""}
     rounds = info.get("rounds") or 0
     streak = info.get("streak") or 0
+    threshold_text = f"{float(info.get('threshold') or 0):.0f}"
     if info.get("triggered"):
-        return {"marker": MARKER_ON, "value": "已触发认输", "value_color": DANGER,
-                "detail": f"连续 {streak}/{rounds}"}
+        return {"marker": MARKER_ON, "value": t("ov.cd.triggered"),
+                "value_color": DANGER,
+                "detail": t("ov.cd.detail", threshold=threshold_text,
+                            streak=streak, rounds=rounds)}
     rate = info.get("rate")
     if rate is None:
         turn = info.get("checked_turn")
-        where = f"第 {turn} 回合" if turn else "本回合"
-        return {"marker": MARKER_ON, "value": "未读到", "value_color": WARN,
-                "detail": f"{where} · 连续 {streak}/{rounds}"}
+        where = (t("ov.cd.where.turn", turn=turn) if turn
+                 else t("ov.cd.where.now"))
+        return {"marker": MARKER_ON, "value": t("ov.cd.no_rate"),
+                "value_color": WARN,
+                "detail": t("ov.cd.no_rate.detail", where=where,
+                            streak=streak, rounds=rounds)}
     threshold = info.get("threshold")
     below = threshold is not None and float(rate) < float(threshold)
-    if threshold is None:
-        detail = f"连续 {streak}/{rounds}"
-    elif below:
-        detail = f"低于阈值 {float(threshold):.0f}% · 连续 {streak}/{rounds}"
+    if below:
+        detail = t("ov.cd.detail.below", threshold=threshold_text,
+                   streak=streak, rounds=rounds)
     else:
-        detail = f"阈值 {float(threshold):.0f}% · 连续 {streak}/{rounds}"
+        detail = t("ov.cd.detail", threshold=threshold_text,
+                   streak=streak, rounds=rounds)
     return {"marker": MARKER_ON,
             "value": f"{float(rate):.0f}%",
             "value_color": WARN if below else TEXT,
@@ -336,34 +357,35 @@ def hearthstone_row(info) -> dict:
         status: ok | warning | stale | gone | idle | disabled | unknown
     """
     if info is None:
-        return {"marker": MARKER_UNKNOWN, "value": "—", "value_color": DIM,
-                "detail": ""}
+        return {"marker": MARKER_UNKNOWN, "value": t("ov.value.unknown"),
+                "value_color": DIM, "detail": ""}
     status = info.get("status")
     age = info.get("log_age")
+    stall = t("ov.lv.stall", age=f"{age:.0f}") if age is not None else ""
     if status == "disabled":
-        return {"marker": MARKER_OFF, "value": "关", "value_color": DIM,
-                "detail": ""}
+        return {"marker": MARKER_OFF, "value": t("ov.value.off"),
+                "value_color": DIM, "detail": ""}
     if status == "gone":
-        return {"marker": MARKER_OFF, "value": "已退出", "value_color": DANGER,
-                "detail": "已自动停止"}
+        return {"marker": MARKER_OFF, "value": t("ov.lv.gone"),
+                "value_color": DANGER, "detail": t("ov.lv.gone.detail")}
     if status == "stale":
-        return {"marker": MARKER_OFF, "value": "无响应", "value_color": DANGER,
-                "detail": f"日志停滞 {age:.0f}s" if age is not None else ""}
+        return {"marker": MARKER_OFF, "value": t("ov.lv.stale"),
+                "value_color": DANGER, "detail": stall}
     if status == "warning":
-        return {"marker": MARKER_ON, "value": "疑似卡死", "value_color": WARN,
-                "detail": f"日志停滞 {age:.0f}s" if age is not None else ""}
+        return {"marker": MARKER_ON, "value": t("ov.lv.warning"),
+                "value_color": WARN, "detail": stall}
     if status == "idle":
-        return {"marker": MARKER_UNKNOWN, "value": "未运行", "value_color": WARN,
-                "detail": ""}
+        return {"marker": MARKER_UNKNOWN, "value": t("ov.lv.idle"),
+                "value_color": WARN, "detail": ""}
     if status == "ok":
         # 只有对局中才关心 Power.log 的新鲜度（主菜单/匹配阶段本来就安静）。
         detail = ""
         if info.get("in_game") and age is not None:
-            detail = f"日志 {age:.0f}s 前"
-        return {"marker": MARKER_ON, "value": "运行中", "value_color": GREEN,
-                "detail": detail}
-    return {"marker": MARKER_UNKNOWN, "value": "—", "value_color": DIM,
-            "detail": ""}
+            detail = t("ov.lv.ok.detail", age=f"{age:.0f}")
+        return {"marker": MARKER_ON, "value": t("ov.lv.ok"),
+                "value_color": GREEN, "detail": detail}
+    return {"marker": MARKER_UNKNOWN, "value": t("ov.value.unknown"),
+            "value_color": DIM, "detail": ""}
 
 
 def _clip(text, limit: int = _DETAIL_LIMIT) -> str:
@@ -382,18 +404,19 @@ def account_row(info, show_account: bool = True) -> dict:
     ``show_account=False``（点了眼睛按钮）时不显示昵称，只保留匹配与否。
     """
     if info is None or info.get("matched") is None:
-        return {"marker": MARKER_UNKNOWN, "value": "—", "value_color": DIM,
-                "detail": ""}
+        return {"marker": MARKER_UNKNOWN, "value": t("ov.value.unknown"),
+                "value_color": DIM, "detail": ""}
+    matched = bool(info.get("matched"))
+    value = t("ov.account.match") if matched else t("ov.account.mismatch")
     if not show_account:
-        return {"marker": MARKER_ON if info.get("matched") else MARKER_OFF,
-                "value": "匹配" if info.get("matched") else "不匹配",
-                "value_color": GREEN if info.get("matched") else DANGER,
-                "detail": _ACCOUNT_HIDDEN_TEXT}
+        return {"marker": MARKER_ON if matched else MARKER_OFF,
+                "value": value,
+                "value_color": GREEN if matched else DANGER,
+                "detail": account_hidden_text()}
     names = sorted(info.get("players", {}).values())
-    if info.get("matched"):
-        return {"marker": MARKER_ON, "value": "匹配", "value_color": GREEN,
-                "detail": _clip(names[0] if names else info.get("config"))}
-    return {"marker": MARKER_OFF, "value": "不匹配", "value_color": DANGER,
+    return {"marker": MARKER_ON if matched else MARKER_OFF,
+            "value": value,
+            "value_color": GREEN if matched else DANGER,
             "detail": _clip(names[0] if names else info.get("config"))}
 
 
@@ -532,8 +555,8 @@ def _run() -> None:
         sw = root.winfo_screenwidth()
         sh = root.winfo_screenheight()
         # 高度：品牌行 + 状态面板（4 行）+ 三行按钮都要放得下，日志区还要有
-        # 9 行左右。按钮改成一行两个 + 字号变小后，比原来（640）矮 40px。
-        W, H = 292, 600
+        # 9 行左右。宽度见 WINDOW_WIDTH 的说明（要放得下英文状态面板）。
+        W, H = WINDOW_WIDTH, WINDOW_HEIGHT
         x = sw - W - 12
         y = 12
         root.geometry(f"{W}x{H}+{x}+{y}")
@@ -585,8 +608,9 @@ def _run() -> None:
         brand.pack(fill="x")
         tk.Label(brand, text=BRAND_NAME, bg=TITLE_BG, fg=GOLD,
                  font=("Georgia", 13, "bold")).pack(pady=(9, 0))
-        tk.Label(brand, text=BRAND_SUB, bg=TITLE_BG, fg=DIM,
-                 font=("Microsoft YaHei", 8)).pack(pady=(1, 7))
+        brand_sub = tk.Label(brand, text=t("ov.brand.sub"), bg=TITLE_BG,
+                             fg=DIM, font=("Microsoft YaHei", 8))
+        brand_sub.pack(pady=(1, 7))
         tk.Frame(root, bg=GOLD, height=1).pack(fill="x", padx=10)
         tk.Frame(root, bg=PANEL, height=1).pack(fill="x")
 
@@ -596,17 +620,17 @@ def _run() -> None:
         dot = tk.Label(head, text="●", bg=TITLE_BG, fg=GREEN,
                        font=("Segoe UI", 10))
         dot.pack(side="left", padx=(10, 4), pady=8)
-        title = tk.Label(head, text="自动化日志", bg=TITLE_BG, fg=TEXT,
+        title = tk.Label(head, text=t("ov.title"), bg=TITLE_BG, fg=TEXT,
                          font=("Microsoft YaHei", 10, "bold"))
         title.pack(side="left", pady=8)
         tk.Frame(root, bg=PANEL, height=1).pack(fill="x")
 
         # ---- 战绩行 -------------------------------------------------
-        score_label = tk.Label(root, text="📊 战绩： —", bg=TITLE_BG, fg=DIM,
-                               font=("Microsoft YaHei", 9), anchor="w")
+        score_label = tk.Label(root, text=t("ov.score.none"), bg=TITLE_BG,
+                               fg=DIM, font=("Microsoft YaHei", 9), anchor="w")
         score_label.pack(fill="x", padx=8, pady=(6, 0))
-        # ---- 状态面板：活人感 / 投降检测 ----------------------------
-        # 用 grid 对齐成两行两列（左：名称+状态值；右：参数/计数），比原先
+        # ---- 状态面板：活人感 / 投降检测 / 炉石 / 账号 ----------------
+        # 用 grid 对齐成四行（左：名称+状态值；右：参数/计数），比原先
         # 一整行塞满括号文本更清爽，也不再依赖容易糊掉的 emoji 图标。
         status = tk.Frame(root, bg=PANEL)
         status.pack(fill="x")
@@ -616,7 +640,7 @@ def _run() -> None:
             marker = tk.Label(status, text="●", bg=PANEL, fg=DIM,
                               font=("Segoe UI", 7))
             marker.grid(row=row_index, column=0, sticky="w",
-                        padx=(10, 4), pady=1)
+                        padx=(8, 3), pady=1)
             name = tk.Label(status, text=name_text, bg=PANEL, fg=DIM,
                             font=("Microsoft YaHei", 8))
             name.grid(row=row_index, column=1, sticky="w", pady=1)
@@ -626,13 +650,17 @@ def _run() -> None:
             detail = tk.Label(status, text="", bg=PANEL, fg=DIM,
                               font=("Microsoft YaHei", 8))
             detail.grid(row=row_index, column=3, sticky="e",
-                        padx=(6, 10), pady=1)
-            return marker, value, detail
+                        padx=(6, 6), pady=1)
+            return marker, name, value, detail
 
-        hl_marker, hl_value, hl_detail = _status_row(0, "活人感")
-        cd_marker, cd_value, cd_detail = _status_row(1, "投降检测")
-        lv_marker, lv_value, lv_detail = _status_row(2, "炉石")
-        ac_marker, ac_value, ac_detail = _status_row(3, "账号")
+        hl_marker, hl_name, hl_value, hl_detail = _status_row(
+            0, t("ov.row.human_like"))
+        cd_marker, cd_name, cd_value, cd_detail = _status_row(
+            1, t("ov.row.concede"))
+        lv_marker, lv_name, lv_value, lv_detail = _status_row(
+            2, t("ov.row.hearthstone"))
+        ac_marker, ac_name, ac_value, ac_detail = _status_row(
+            3, t("ov.row.account"))
 
         # 「账号」行最右侧的眼睛按钮：点一下在“显示昵称 / 隐藏昵称”之间互换，
         # 适合截图、录屏、开直播时用（隐藏状态会记住）。
@@ -640,7 +668,7 @@ def _run() -> None:
         # 图标放在固定尺寸的小容器里：虽然字形不变，但固定尺寸能让整行布局
         # 绝对稳定（Tk 重排偶尔会留下没擦干净的重影）。
         eye_box = tk.Frame(status, bg=PANEL, width=24, height=18)
-        eye_box.grid(row=3, column=4, sticky="e", padx=(2, 8), pady=1)
+        eye_box.grid(row=3, column=4, sticky="e", padx=(2, 6), pady=1)
         eye_box.grid_propagate(False)
         initial_visible = account_visible()
         eye_btn = tk.Label(
@@ -688,7 +716,7 @@ def _run() -> None:
             finally:
                 _raise_hearthstone()
 
-        start_btn = _make_btn(btn_frame, "▶  开始对战", ACCENT, _call_start)
+        start_btn = _make_btn(btn_frame, t("ov.btn.start"), ACCENT, _call_start)
         _place(start_btn, "start")
 
         def _call_halt():
@@ -698,18 +726,18 @@ def _run() -> None:
             finally:
                 _raise_hearthstone()
 
-        halt_btn = _make_btn(btn_frame, "⏹  中止", DANGER, _call_halt)
+        halt_btn = _make_btn(btn_frame, t("ov.btn.halt"), DANGER, _call_halt)
         _place(halt_btn, "halt")
 
         def _set_stop_after_state():
             active = bool(_IS_STOP_AFTER() if _IS_STOP_AFTER is not None else False)
             if active:
                 _set(stop_after_btn,
-                     text="✓  本局结束后停止（点击取消）",
+                     text=t("ov.btn.stop_after.active"),
                      bg=OK, activebackground=OK)
             else:
                 _set(stop_after_btn,
-                     text="⏸  本局结束后停止", bg=WARN, activebackground=WARN)
+                     text=t("ov.btn.stop_after"), bg=WARN, activebackground=WARN)
 
         def _call_stop_after():
             try:
@@ -719,26 +747,30 @@ def _run() -> None:
                 _raise_hearthstone()
                 _set_stop_after_state()
 
-        stop_after_btn = _make_btn(btn_frame, "⏸  本局结束后停止", WARN,
+        stop_after_btn = _make_btn(btn_frame, t("ov.btn.stop_after"), WARN,
                                    _call_stop_after)
         _place(stop_after_btn, "stop_after")
+
+        # 「保存日志」按钮的三种状态只记状态名，文案每轮按当前语言生成，
+        # 这样网页上切换语言后按钮文字也会跟着变。
+        save_state = ["normal"]
+        _SAVE_KEYS = {"normal": "ov.btn.save", "saved": "ov.btn.saved",
+                      "failed": "ov.btn.save_failed"}
+        _SAVE_COLORS = {"normal": OK, "saved": OK, "failed": DANGER}
 
         def _call_save():
             try:
                 path = _save_log()
-                push(f"[SYS] 对战日志已保存：{path}")
-                save_btn.config(text="✓  已保存", bg=OK)
-                root.after(2000, lambda: save_btn.config(
-                    text="💾  保存日志", bg=OK))
+                push(t("ov.log.saved", path=path))
+                save_state[0] = "saved"
             except Exception as exc:
-                push(f"[SYS] 保存对战日志失败：{exc}")
-                save_btn.config(text="✗  保存失败", bg=DANGER)
-                root.after(2000, lambda: save_btn.config(
-                    text="💾  保存日志", bg=OK))
+                push(t("ov.log.save_failed", error=exc))
+                save_state[0] = "failed"
             finally:
                 _raise_hearthstone()
+                root.after(2000, lambda: save_state.__setitem__(0, "normal"))
 
-        save_btn = _make_btn(btn_frame, "💾  保存日志", OK, _call_save)
+        save_btn = _make_btn(btn_frame, t("ov.btn.save"), OK, _call_save)
         _place(save_btn, "save")
 
         def _call_exit():
@@ -751,7 +783,7 @@ def _run() -> None:
             # 没有绑定退出回调时，关闭浮窗本身（兜底）。
             stop()
 
-        exit_btn = _make_btn(btn_frame, "🚪  退出脚本", DANGER, _call_exit)
+        exit_btn = _make_btn(btn_frame, t("ov.btn.exit"), DANGER, _call_exit)
         _place(exit_btn, "exit")
 
         # ---- delay progress (bottom; 先占底部，日志区填剩余空间) ------
@@ -760,7 +792,7 @@ def _run() -> None:
         delay_canvas = tk.Canvas(delay_frame, height=8, bg=PANEL,
                                  highlightthickness=0)
         delay_canvas.pack(fill="x", pady=(0, 2))
-        delay_label = tk.Label(delay_frame, text="延时：无", bg=BG, fg=DIM,
+        delay_label = tk.Label(delay_frame, text=t("ov.delay.none"), bg=BG, fg=DIM,
                                font=("Microsoft YaHei", 8), anchor="w")
         delay_label.pack(fill="x")
 
@@ -825,16 +857,17 @@ def _run() -> None:
                 shown[0] = fp
             if _IS_RUNNING is not None:
                 if _IS_RUNNING():
-                    _set(halt_btn, text="⏹  中止", bg=DANGER,
+                    _set(halt_btn, text=t("ov.btn.halt"), bg=DANGER,
                          activebackground=DANGER)
                 else:
-                    _set(halt_btn, text="▶  恢复", bg=OK, activebackground=OK)
+                    _set(halt_btn, text=t("ov.btn.resume"), bg=OK,
+                         activebackground=OK)
             if _IS_IN_GAME is not None and _IS_IN_GAME():
-                _set(start_btn, state="disabled", text="⏳  对局进行中",
+                _set(start_btn, state="disabled", text=t("ov.btn.in_game"),
                      bg=DISABLED, activebackground=DISABLED,
                      disabledforeground=DIM, cursor="arrow")
             else:
-                _set(start_btn, state="normal", text="▶  开始对战",
+                _set(start_btn, state="normal", text=t("ov.btn.start"),
                      bg=ACCENT, activebackground=ACCENT,
                      disabledforeground=DIM, cursor="hand2")
             if _SCORE is not None:
@@ -851,12 +884,13 @@ def _run() -> None:
                     losses = max(games - wins, 0)
                     rate = (wins / games * 100) if games else 0.0
                     rate_txt = f"{rate:.1f}%" if games else "--"
-                    concede_txt = f" · 认输 {concedes}" if concedes else ""
-                    _set(score_label,
-                         text=f"📊 战绩： 胜 {wins} · 负 {losses} · "
-                              f"胜率 {rate_txt}{concede_txt}", fg=TEXT)
+                    concede_txt = (t("ov.score.concedes", n=concedes)
+                                   if concedes else "")
+                    _set(score_label, fg=TEXT,
+                         text=t("ov.score", wins=wins, losses=losses,
+                                rate=rate_txt, concedes=concede_txt))
                 else:
-                    _set(score_label, text="📊 战绩： —", fg=DIM)
+                    _set(score_label, text=t("ov.score.none"), fg=DIM)
             if _HUMAN_LIKE is not None:
                 try:
                     hl_info = _HUMAN_LIKE()
@@ -890,7 +924,7 @@ def _run() -> None:
                 except Exception:
                     ac_info = None
                 row = account_row(ac_info, show_account=account_visible())
-                hidden = row["detail"] == _ACCOUNT_HIDDEN_TEXT
+                hidden = row["detail"] == account_hidden_text()
                 _set(ac_marker, fg=row["marker"])
                 _set(ac_value, text=row["value"], fg=row["value_color"])
                 # 隐藏时「已隐藏」用白色，和白色的眼睛保持同一套语义。
@@ -909,14 +943,15 @@ def _run() -> None:
                     # 延时已结束：主动清空，避免 “0/0.5s” 这类短延时残留。
                     with _LOCK:
                         _DELAY = None
-                    _set(delay_label, text="延时：无", fg=DIM)
+                    _set(delay_label, text=t("ov.delay.none"), fg=DIM)
                     if delay_bar[0] is not None:
                         delay_canvas.delete("all")
                         delay_bar[0] = None
                 else:
-                    _set(delay_label,
-                         text=f"⏳ {delay['desc']}（{remaining:.0f}/{total:.0f}s）",
-                         fg=TEXT)
+                    _set(delay_label, fg=TEXT,
+                         text=t("ov.delay.running", desc=delay["desc"],
+                                remaining=f"{remaining:.0f}",
+                                total=f"{total:.0f}"))
                     # 进度条每 350ms 重画一次会明显闪烁：进度变化小于 2% 时不重画。
                     if delay_bar[0] is None or abs(frac - delay_bar[0]) >= 0.02:
                         w = max(delay_canvas.winfo_width(), 1)
@@ -925,10 +960,20 @@ def _run() -> None:
                             0, 0, w * frac, 8, fill=ACCENT, outline="")
                         delay_bar[0] = frac
             else:
-                _set(delay_label, text="延时：无", fg=DIM)
+                _set(delay_label, text=t("ov.delay.none"), fg=DIM)
                 if delay_bar[0] is not None:
                     delay_canvas.delete("all")
                     delay_bar[0] = None
+            # 语言可能在网页上随时切换：静态文案每轮对一次（_set 只在变化时才重绘）。
+            _set(brand_sub, text=t("ov.brand.sub"))
+            _set(title, text=t("ov.title"))
+            _set(hl_name, text=t("ov.row.human_like"))
+            _set(cd_name, text=t("ov.row.concede"))
+            _set(lv_name, text=t("ov.row.hearthstone"))
+            _set(ac_name, text=t("ov.row.account"))
+            _set(save_btn, text=t(_SAVE_KEYS[save_state[0]]),
+                 bg=_SAVE_COLORS[save_state[0]])
+            _set(exit_btn, text=t("ov.btn.exit"))
             _set_stop_after_state()
             if at_bottom and changed and lines:
                 text.see("end")
