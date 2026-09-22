@@ -87,7 +87,7 @@
 > 需要 **Python 3.12**（自带 pip）。
 
 ### 1. 安装 Python 3.12
-- 到 <https://www.python.org/downloads/> 下载 **Python 3.12** 安装包；
+- 到 <https://www.python.org/downloads/> 下载 **Python 3.12** 安装包（非常重要，当前出现多个安装成3.14导致无法识别的朋友，如果你后续的分辨率都是设置正确，脚本可以正确点击开始游戏但是进入游戏后卡在换牌且AI识别都无法正常工作，必须检查当前python的版本是否为3.12！）；
 - 安装时**务必勾选 "Add python.exe to PATH"**；
 - 装完在 PowerShell 运行 `python --version` 验证。
 
