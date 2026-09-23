@@ -130,6 +130,7 @@ input:disabled{opacity:.45;cursor:not-allowed}
 .check-hint{grid-column:2 / -1;color:var(--amber);font-size:12.2px}
 .check-item.bad .check-hint{color:#f0937f}
 @media (max-width:700px){.check-item{grid-template-columns:20px 1fr}.check-label{grid-column:2}.check-detail,.check-hint{grid-column:2 / -1}}
+.region-shot{width:100%;display:block;border:1px solid var(--border);border-radius:10px;margin-top:10px;background:#0a0705}
 /* ---------- Toast ---------- */
 #toasts{position:fixed;top:16px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:99}
 .toast{background:#241b10;border:1px solid var(--border);border-left:4px solid var(--blue);padding:10px 14px;border-radius:10px;font-size:13px;max-width:340px;box-shadow:0 8px 24px rgba(0,0,0,.5);animation:slidein .25s;transition:all .4s}
@@ -376,12 +377,20 @@ a:hover{color:#fff3c9;border-bottom-color:#fff3c9}
       <div class="hint-line" id="delayHint">当前时序由服务端配置返回，见下方保存后刷新。</div>
     </section>
 
-    <section class="card wide">
-      <h2 class="card-title">🎯 校准推荐区域</h2>
+    <section class="card wide" id="cardRegions">
+      <h2 class="card-title">🎯 校准区域 / 截图区域框</h2>
       <div class="btn-row">
-        <button id="btnCalibrate" class="btn btn-ghost" type="button">📐 显示校准框</button>
+        <button id="btnCalibrate" class="btn btn-ghost" type="button">📐 显示校准框（屏幕上）</button>
+        <button id="btnRegions" class="btn btn-ghost" type="button">🖼️ 显示截图区域框（页面内）</button>
+        <button id="btnRegionsHide" class="btn btn-ghost btn-small" type="button" style="display:none">收起预览</button>
       </div>
-      <div class="hint-line">对战中启动：屏幕显示绿框（= 程序截图区域）+ 右侧实时 OCR 预览。拖动绿框使盒子的「打法参考A」面板对齐，识别到后点 [保存]（写入即生效，不覆盖名字/日志目录），Esc 退出。</div>
+      <div class="hint-line">📐 <b>屏幕校准</b>：对战中启动，屏幕显示绿框（= 程序截图区域）+ 右侧实时 OCR 预览。拖动绿框使盒子的「打法参考A」面板对齐，识别到后点 [保存]（写入即生效，不覆盖名字/日志目录），Esc 退出。</div>
+      <div class="hint-line">🖼️ <b>页面内预览</b>：截一张当前屏幕，把脚本实际使用的截图区域画出来 —— 🟩 绿框=盒子推荐面板（OCR 来源）、🟦 蓝框=换牌「确认」按钮、🟧 橙框=AI胜率浮动条、🟥 红细框=AI胜率兜底区域、✛ 黄十字=阶段判定点。用它确认三件事：<b>分辨率是不是 1920×1080、缩放是不是 100%、盒子的「打法参考A」面板有没有正好落在绿框里</b>。只截图，不点击、不移动鼠标，自动化运行中也能用。</div>
+      <div id="regionsResult" style="display:none">
+        <div id="regionsChecks" class="check-list"></div>
+        <div id="regionsRows" class="check-list"></div>
+        <img id="regionsImg" class="region-shot" alt="截图区域框预览">
+      </div>
     </section>
 
     <section class="card wide">
@@ -811,7 +820,7 @@ $("btnCalibrate").addEventListener("click", function(){
   });
 });
 
-/* ---------- 环境自检（✅⚠️❌ 一套渲染） ---------- */
+/* ---------- 环境自检 / 截图区域框（共用一套 ✅⚠️❌ 渲染） ---------- */
 var CHECK_ICON = {ok:"✅", warn:"⚠️", fail:"❌"};
 var CHECK_CLASS = {ok:"ok", warn:"warn", fail:"bad"};
 
@@ -857,6 +866,50 @@ $("btnSelfcheck").addEventListener("click", function(){
 
 /* 页面一打开就显示启动自检的结果（第一次开启脚本自动跑的那次） */
 get("/api/selfcheck").then(function(r){ if (r.ok) renderSelfcheck(r.result); });
+
+function renderRegions(res){
+  renderChecks($("regionsChecks"), res.checks);
+  var rows = "";
+  (res.regions || []).forEach(function(rg){
+    rows += '<div class="check-item ok" style="border-left-color:' + esc(rg.color) + '">' +
+            '<span class="check-ico">■</span>' +
+            '<span class="check-label">' + esc(rg.label) + '</span>' +
+            '<span class="check-detail">[' + esc((rg.box || []).join(",")) + '] ' + esc(rg.note || "") + '</span>' +
+            '</div>';
+  });
+  var pts = (res.points || []).map(function(p){
+    return p.label + " " + (p.point || []).join(",");
+  }).join("；");
+  rows += '<div class="check-item ok" style="border-left-color:#f7d97e">' +
+          '<span class="check-ico">✛</span>' +
+          '<span class="check-label">状态判定点</span>' +
+          '<span class="check-detail">' + esc(pts) + '（脚本靠这几个像素判断当前阶段）</span>' +
+          '</div>';
+  $("regionsRows").innerHTML = rows;
+  $("regionsImg").src = res.image;
+  $("regionsResult").style.display = "";
+  $("btnRegionsHide").style.display = "";
+}
+
+$("btnRegions").addEventListener("click", function(){
+  var btn = $("btnRegions");
+  btn.disabled = true; btn.textContent = "截图中…";
+  get("/api/regions").then(function(r){
+    btn.disabled = false; btn.textContent = "🖼️ 显示截图区域框（页面内）";
+    if (!r.ok){ toast(r.error || "截图失败", "error"); return; }
+    renderRegions(r.result);
+    var failed = (r.result.checks || []).filter(function(c){ return c.status === "fail"; });
+    toast(failed.length
+            ? "预览已生成，但有 " + failed.length + " 项不对：见上方提示"
+            : "预览已生成：" + r.result.width + "×" + r.result.height,
+          failed.length ? "warn" : "ok");
+  });
+});
+
+$("btnRegionsHide").addEventListener("click", function(){
+  $("regionsResult").style.display = "none";
+  this.style.display = "none";
+});
 
 /* ---------- 对战控制 ---------- */
 $("btnOverlay").addEventListener("click", function(){

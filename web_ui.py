@@ -43,7 +43,8 @@ CONFIG_PATH = ROOT / "ui_config.json"
 from config import (
     DEFAULT_AUTO_CONCEDE, DEFAULT_HUMAN_LIKE, DEFAULT_LIVENESS, HOST,
     BASE_PORT, LOG_BUFFER_SIZE, _USER_DELAY_KEYS, RecommendationConfig)
-# 环境自检（Python 3.12 / 依赖包 / 分辨率缩放 / 管理员权限）。
+# 环境自检（Python 3.12 / 依赖包 / 分辨率缩放）与原样截图区域框预览。
+import screen_regions
 import selfcheck
 
 
@@ -209,6 +210,25 @@ def selfcheck_summary() -> dict:
 
 def api_selfcheck(force: bool = True) -> dict:
     return {"ok": True, "result": run_selfcheck(force=force)}
+
+
+def api_regions() -> dict:
+    """截一张屏幕并画出所有截图区域框（只截图，不点击、不移动鼠标）。"""
+    try:
+        result = screen_regions.build_region_preview()
+    except Exception as exc:
+        traceback.print_exc()
+        return {"ok": False,
+                "error": f"截图失败：{type(exc).__name__}: {exc}"}
+    failed = [c for c in result.get("checks", [])
+              if c.get("status") == selfcheck.STATUS_FAIL]
+    if failed:
+        _log("WARN", "截图区域框：" + "；".join(
+            f"{c.get('label', '')} {c.get('detail', '')}" for c in failed))
+    else:
+        _log("SYS", f"截图区域框：分辨率 {result['width']}×{result['height']}，"
+                    f"已标注 {len(result.get('regions', []))} 个区域")
+    return {"ok": True, "result": result}
 
 
 def take_logs_after(seq: int):
@@ -1365,6 +1385,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(check_log_dir(q.get("path", [""])[0]))
             elif path == "/api/selfcheck":
                 self._json(api_selfcheck(force=False))
+            elif path == "/api/regions":
+                self._json(api_regions())
             else:
                 self._json({"ok": False, "error": "未知接口"}, 404)
         except Exception as exc:
