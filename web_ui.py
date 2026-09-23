@@ -43,6 +43,8 @@ CONFIG_PATH = ROOT / "ui_config.json"
 from config import (
     DEFAULT_AUTO_CONCEDE, DEFAULT_HUMAN_LIKE, DEFAULT_LIVENESS, HOST,
     BASE_PORT, LOG_BUFFER_SIZE, _USER_DELAY_KEYS, RecommendationConfig)
+# 环境自检（Python 3.12 / 依赖包 / 分辨率缩放 / 管理员权限）。
+import selfcheck
 
 
 # ---------------------------------------------------------------- 管理员检测
@@ -128,6 +130,85 @@ def _overlay_key(line: str) -> bool:
             # 存活检测 / 昵称校验的告警必须进浮窗（issue 反馈看不到就白做）
             "炉石", "昵称", "用户 ID")
     return ("[OCR]" not in line) and any(k in line for k in keys)
+
+
+# ---------------------------------------------------------------- 环境自检
+# 自检结果缓存：页面刷新/轮询不会反复 import numpy、OCR 这些重依赖；
+# 页面上的 [重新自检] 按钮传 force=True 才会重跑。
+_selfcheck_state = {"result": None, "lock": threading.Lock()}
+
+
+def run_selfcheck(force: bool = False) -> dict:
+    """跑一遍环境自检（Python 版本、依赖包、分辨率/缩放/权限等运行环境）。"""
+    with _selfcheck_state["lock"]:
+        cached = _selfcheck_state["result"]
+    if cached is not None and not force:
+        return cached
+    try:
+        result = selfcheck.run_checks()
+    except Exception as exc:  # 自检自己崩了也要给页面一个结论，不能白屏
+        traceback.print_exc()
+        result = {
+            "ok": False, "failed": 1, "warned": 0, "passed": 0, "total": 0,
+            "summary": f"自检执行失败：{type(exc).__name__}: {exc}",
+            "python": f"{sys.version_info.major}.{sys.version_info.minor}."
+                      f"{sys.version_info.micro}",
+            "checked_at": datetime.now().isoformat(timespec="seconds"),
+            "items": [],
+        }
+    with _selfcheck_state["lock"]:
+        _selfcheck_state["result"] = result
+    _log_selfcheck(result)
+    return result
+
+
+def _log_selfcheck(result: dict):
+    """自检结论写进控制台日志：❌/⚠️ 逐条提示，方便照着提示修。"""
+    _log("SYS", f"环境自检：{result.get('summary', '')}")
+    for item in result.get("items", []):
+        status = item.get("status")
+        if status == selfcheck.STATUS_OK:
+            continue
+        level = "ERROR" if status == selfcheck.STATUS_FAIL else "WARN"
+        text = (f"环境自检 {selfcheck.STATUS_ICON.get(status, '')} "
+                f"{item.get('label', '')}：{item.get('detail', '')}")
+        if item.get("hint"):
+            text += f" —— {item['hint']}"
+        _log(level, text)
+
+
+def start_selfcheck_async():
+    """脚本启动时后台跑一遍自检：第一次打开脚本就能看到依赖是否齐全。"""
+    def _run():
+        try:
+            run_selfcheck(force=True)
+        except Exception:
+            pass
+
+    thread = threading.Thread(target=_run, name="hs-selfcheck", daemon=True)
+    thread.start()
+    return thread
+
+
+def selfcheck_summary() -> dict:
+    """给 /api/status 的精简自检结论（完整明细走 /api/selfcheck）。"""
+    with _selfcheck_state["lock"]:
+        result = _selfcheck_state["result"]
+    if not result:
+        return {"checked": False}
+    return {
+        "checked": True,
+        "ok": bool(result.get("ok")),
+        "failed": int(result.get("failed", 0)),
+        "warned": int(result.get("warned", 0)),
+        "summary": result.get("summary", ""),
+        "checked_at": result.get("checked_at"),
+        "python": result.get("python"),
+    }
+
+
+def api_selfcheck(force: bool = True) -> dict:
+    return {"ok": True, "result": run_selfcheck(force=force)}
 
 
 def take_logs_after(seq: int):
@@ -1222,6 +1303,7 @@ def status_snapshot():
         "liveness_alert": _liveness_state().get("alert"),
         "name_match": _name_match_state(),
         "delays": _current_delays(),
+        "selfcheck": selfcheck_summary(),
         "config": {"name": cfg.get("name", ""), "log_root": cfg.get("log_root", "")},
         "last_error": err,
         "last_summary": summary,
@@ -1281,6 +1363,8 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/check_log":
                 q = parse_qs(parsed.query)
                 self._json(check_log_dir(q.get("path", [""])[0]))
+            elif path == "/api/selfcheck":
+                self._json(api_selfcheck(force=False))
             else:
                 self._json({"ok": False, "error": "未知接口"}, 404)
         except Exception as exc:
@@ -1320,6 +1404,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(api_save_liveness(body))
             elif path == "/api/delays":
                 self._json(api_save_delays(body))
+            elif path == "/api/selfcheck":
+                self._json(api_selfcheck(force=True))
             else:
                 self._json({"ok": False, "error": "未知接口"}, 404)
         except Exception as exc:
@@ -1364,6 +1450,8 @@ def main():
     cfg = load_config()
     _apply_constants(cfg.get("name") or "", cfg.get("log_root") or "")
     _boot_resume_schedule()
+    # 启动即自检：Python 版本 / 依赖包 / 分辨率和缩放（结果进日志与页面）。
+    start_selfcheck_async()
 
     server = None
     port = None

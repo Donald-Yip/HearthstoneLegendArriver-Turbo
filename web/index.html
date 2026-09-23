@@ -119,6 +119,17 @@ input:disabled{opacity:.45;cursor:not-allowed}
 .log-debug .log-level{background:rgba(160,160,160,.12);color:#9a9a9a}
 .log-info .log-level{background:rgba(99,199,111,.12);color:#8ed497}
 .autoscroll{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);font-weight:400;cursor:pointer}
+/* ---------- 自检 / 截图区域清单 ---------- */
+.check-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.check-item{display:grid;grid-template-columns:20px 218px 1fr;gap:8px;align-items:baseline;background:var(--panel2);border:1px solid var(--border-soft);border-left:3px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12.8px;line-height:1.5}
+.check-item.ok{border-left-color:var(--green)}
+.check-item.warn{border-left-color:var(--amber)}
+.check-item.bad{border-left-color:var(--red)}
+.check-label{color:var(--text);font-weight:600}
+.check-detail{color:var(--muted);word-break:break-word}
+.check-hint{grid-column:2 / -1;color:var(--amber);font-size:12.2px}
+.check-item.bad .check-hint{color:#f0937f}
+@media (max-width:700px){.check-item{grid-template-columns:20px 1fr}.check-label{grid-column:2}.check-detail,.check-hint{grid-column:2 / -1}}
 /* ---------- Toast ---------- */
 #toasts{position:fixed;top:16px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:99}
 .toast{background:#241b10;border:1px solid var(--border);border-left:4px solid var(--blue);padding:10px 14px;border-radius:10px;font-size:13px;max-width:340px;box-shadow:0 8px 24px rgba(0,0,0,.5);animation:slidein .25s;transition:all .4s}
@@ -177,6 +188,19 @@ a:hover{color:#fff3c9;border-bottom-color:#fff3c9}
         <span>⏱ 本局已进行 <b id="stElapsed">0:00</b></span>
         <span id="stopNote"></span>
       </div>
+    </section>
+
+    <section class="card wide" id="cardSelfcheck">
+      <h2 class="card-title">
+        <span>🧪 环境自检</span>
+        <span style="display:flex;gap:10px;align-items:center">
+          <span id="selfcheckBadge" class="chip">自检中…</span>
+          <button id="btnSelfcheck" class="btn btn-ghost btn-small" type="button">🔍 重新自检</button>
+        </span>
+      </h2>
+      <div class="hint-line" id="selfcheckSummary">正在自检：Python 版本 / 依赖包 / 分辨率与缩放…</div>
+      <div id="selfcheckList" class="check-list"></div>
+      <div class="hint-line">脚本<b>第一次启动时会自动自检一遍</b>，这里显示的就是那次结果，随时可点 [重新自检] 重跑。✅ 达标 · ⚠️ 与推荐值不同（还能跑）· ❌ 缺失或不满足（必须修）。<b>Python 必须是 3.12 的 64 位版本</b>：OCR 后端 paddlepaddle 没有 3.13 及以上的轮子，3.11 及以下也不在本项目实测范围内（推荐 <code>conda create -n HTL python=3.12 -y</code>）。</div>
     </section>
 
     <section class="card">
@@ -458,6 +482,12 @@ function renderBanners(s){
   var lvAlert = s.liveness_alert || (s.liveness && s.liveness.alert);
   if (lvAlert){
     html += '<div class="banner banner-err"><span>🩺</span><div>' + esc(lvAlert) + '</div></div>';
+  }
+  /* 环境自检没过：依赖/Python 版本/分辨率不对，先修这个再谈出牌 */
+  var sc = s.selfcheck;
+  if (sc && sc.checked && sc.failed > 0){
+    html += '<div class="banner banner-err"><span>🧪</span><div>环境自检发现 <b>' + sc.failed + ' 项问题</b>：' + esc(sc.summary)
+         + '<br>见下方「🧪 环境自检」卡片的 ❌ 项，按提示逐条修复（依赖缺失执行 <b>pip install -r requirements.txt</b>；Python 必须是 <b>3.12 的 64 位</b>版本）。</div></div>';
   }
   var nm = s.name_match;
   if (nm && nm.matched === false){
@@ -780,6 +810,53 @@ $("btnCalibrate").addEventListener("click", function(){
     else toast(r.error || "启动校准时失败", "error");
   });
 });
+
+/* ---------- 环境自检（✅⚠️❌ 一套渲染） ---------- */
+var CHECK_ICON = {ok:"✅", warn:"⚠️", fail:"❌"};
+var CHECK_CLASS = {ok:"ok", warn:"warn", fail:"bad"};
+
+function renderChecks(box, items){
+  var html = "";
+  (items || []).forEach(function(it){
+    var cls = CHECK_CLASS[it.status] || "warn";
+    html += '<div class="check-item ' + cls + '">' +
+            '<span class="check-ico">' + (CHECK_ICON[it.status] || "•") + '</span>' +
+            '<span class="check-label">' + esc(it.label) + '</span>' +
+            '<span class="check-detail">' + esc(it.detail) + (it.purpose ? ' · ' + esc(it.purpose) : '') + '</span>' +
+            (it.hint && it.status !== "ok" ? '<span class="check-hint">↳ ' + esc(it.hint) + '</span>' : '') +
+            '</div>';
+  });
+  box.innerHTML = html;
+}
+
+function renderSelfcheck(res){
+  if (!res){ $("selfcheckSummary").textContent = "自检结果不可用。"; return; }
+  renderChecks($("selfcheckList"), res.items);
+  var sum = $("selfcheckSummary");
+  sum.textContent = res.summary + "（Python " + (res.python || "?") + " · 自检时间 " + (res.checked_at || "--") + "）";
+  sum.style.color = res.ok ? "var(--green)" : "var(--red)";
+  var badge = $("selfcheckBadge");
+  badge.textContent = res.ok ? "✅ 自检通过" : "❌ " + res.failed + " 项待修";
+  badge.className = "chip" + (res.ok ? "" : " amber");
+}
+
+$("btnSelfcheck").addEventListener("click", function(){
+  var btn = $("btnSelfcheck");
+  btn.disabled = true; btn.textContent = "自检中…";
+  $("selfcheckSummary").textContent = "正在自检：要按顺序 import 一遍依赖，约几秒…";
+  post("/api/selfcheck", {}).then(function(r){
+    btn.disabled = false; btn.textContent = "🔍 重新自检";
+    if (r.ok){
+      renderSelfcheck(r.result);
+      toast(r.result.summary, r.result.ok ? "ok" : "error");
+    } else {
+      toast(r.error || "自检失败", "error");
+    }
+  });
+});
+
+/* 页面一打开就显示启动自检的结果（第一次开启脚本自动跑的那次） */
+get("/api/selfcheck").then(function(r){ if (r.ok) renderSelfcheck(r.result); });
 
 /* ---------- 对战控制 ---------- */
 $("btnOverlay").addEventListener("click", function(){
