@@ -708,6 +708,7 @@ _DELAY_BOUNDS = {
     "first_turn_per_card_delay_seconds": (0.0, 20.0),
     "pre_action_delay_seconds": (0.0, 60.0),
     "post_action_delay_seconds": (0.0, 10.0),
+    "draw_extra_delay_per_card_seconds": (0.0, 20.0),
     "ocr_preprocess_scale": (0.5, 4.0),
 }
 

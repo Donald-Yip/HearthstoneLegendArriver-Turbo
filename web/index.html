@@ -366,6 +366,11 @@ a:hover{color:#fff3c9;border-bottom-color:#fff3c9}
           <span class="field-hint">一次操作后到下轮 OCR 的间隔</span>
         </label>
         <label class="field">
+          <span class="field-label">抽牌额外延时（秒/张）</span>
+          <input id="inpDrawDelay" type="number" min="0" max="20" step="0.5">
+          <span class="field-hint">回合内抽到牌时每张额外等待；回合开始那 1 张常规抽牌不算</span>
+        </label>
+        <label class="field">
           <span class="field-label">OCR 缩放</span>
           <input id="inpOcrScale" type="number" min="0.5" max="4" step="0.1">
           <span class="field-hint">识别精度/速度平衡点</span>
@@ -648,6 +653,7 @@ function render(s){
     $("inpFirstTurnPerCard").value = s.delays.first_turn_per_card_delay_seconds;
     $("inpPreDelay").value = s.delays.pre_action_delay_seconds;
     $("inpPostDelay").value = s.delays.post_action_delay_seconds;
+    $("inpDrawDelay").value = s.delays.draw_extra_delay_per_card_seconds;
     $("inpOcrScale").value = s.delays.ocr_preprocess_scale;
   }
 
@@ -661,6 +667,7 @@ function render(s){
       "每张开局卡 " + d.first_turn_per_card_delay_seconds + "s / " +
       "回合前 " + d.pre_action_delay_seconds + "s / " +
       "操作后 " + d.post_action_delay_seconds + "s / " +
+      "抽牌每张 " + d.draw_extra_delay_per_card_seconds + "s / " +
       "OCR " + d.ocr_preprocess_scale + "。" +
       "写入 ui_config.json 的 delays 段即时生效（下次开局/下回合读取）；自动化运行中不可修改。";
   }
@@ -749,7 +756,7 @@ $("inpLog").addEventListener("input", function(){ dirty.log = true; });
 $("chkConcede").addEventListener("change", function(){ dirtyConcede = true; });
 $("inpConcedeThreshold").addEventListener("input", function(){ dirtyConcede = true; });
 $("inpConcedeRounds").addEventListener("input", function(){ dirtyConcede = true; });
-["inpReadyDelay","inpPostOcrDelay","inpRetryDelay","inpFirstTurnPerCard","inpPreDelay","inpPostDelay","inpOcrScale"]
+["inpReadyDelay","inpPostOcrDelay","inpRetryDelay","inpFirstTurnPerCard","inpPreDelay","inpPostDelay","inpDrawDelay","inpOcrScale"]
   .forEach(function(id){ $(id).addEventListener("input", function(){ dirtyDelays = true; }); });
 
 function saveConfig(){
@@ -1035,6 +1042,7 @@ $("btnSaveDelays").addEventListener("click", function(){
     first_turn_per_card_delay_seconds: $("inpFirstTurnPerCard").value,
     pre_action_delay_seconds: $("inpPreDelay").value,
     post_action_delay_seconds: $("inpPostDelay").value,
+    draw_extra_delay_per_card_seconds: $("inpDrawDelay").value,
     ocr_preprocess_scale: $("inpOcrScale").value
   }).then(function(r){
     if (r.ok){

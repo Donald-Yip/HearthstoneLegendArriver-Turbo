@@ -9,6 +9,10 @@ from src.recommendation_models import ActionKind
 from src.safety.recommendation_validator import ConsumedActionStore
 
 
+# 「回合号还没记录过」的哨兵：不能用 None，因为有些状态里回合号就是 None。
+_UNSET_TURN = object()
+
+
 class FlowStepStatus(str, Enum):
     EXECUTED = "executed"
     OBSERVE = "observe"
@@ -34,7 +38,8 @@ class RecommendationFlow:
                  result_timeout=5.0, stopped=lambda: False,
                  consumed=None, post_action_delay=0.0,
                  post_action_pause=None,
-                 hand_animation_delay=None):
+                 hand_animation_delay=None,
+                 draw_extra_delay_per_card=0.0):
         self.capture = capture
         self.reader = reader
         self.parser = parser
@@ -54,6 +59,17 @@ class RecommendationFlow:
         # 返回 True 表示已接管本次延时，就不再叠加固定的 post_action_delay。
         # 只有走到这里的“识别盒子意见并执行完”的对局动作才会触发它。
         self.post_action_pause = post_action_pause
+        # 「抽牌额外延时」（秒/张，网页「延时设置」可调）。判定看手牌入场数：
+        #   * 每回合开始那一下的常规抽 1 张不算（那 1 张是免费的）；
+        #   * 同一回合里再多抽的（比如开局一次抽 2 张）要算；
+        #   * 回合内任何操作触发的抽牌，每张都算。
+        self.draw_extra_delay_per_card = float(draw_extra_delay_per_card or 0.0)
+        self._seen_entry_count = None
+        # 免费那张只让给“我方这个回合还没执行过动作时”出现的第一次手牌增加，
+        # 这样 Power.log 晚几拍、出牌抽到的牌先被看到时，也不会被误当成免费那张。
+        self._entry_turn = _UNSET_TURN
+        self._entry_turn_exempt_used = False
+        self._acted_this_turn = False
         self.hand_animation_delay = (
             hand_animation_delay
             if hand_animation_delay is not None
@@ -68,6 +84,9 @@ class RecommendationFlow:
             state, revision = self.state_supplier()
             self.hand_animation_delay.observe(
                 getattr(state, "hand_entry_count", 0))
+            # 回合开始的常规抽 1 张不算；这里处理“抽了 2 张以上”和上一步动作
+            # 触发、日志晚几拍才写出来的抽牌。
+            self._account_hand_entries(state)
             if not state.is_my_turn:
                 return FlowStepResult(FlowStepStatus.OBSERVE, "opponent_turn")
             if (self.waiting_turn_number is not None
@@ -112,6 +131,9 @@ class RecommendationFlow:
             if not result.executed or result.recovery_needed:
                 return FlowStepResult(FlowStepStatus.RETRY,
                                       "execution_failed")
+            # 本回合已经动过手：之后再出现的手牌增加都是“操作触发的抽牌”，
+            # 不能再当成回合开始那张免费的。
+            self._acted_this_turn = True
             # 操作结束后延时再开始下一轮截图+OCR（盒子更新面板留时间）。
             # 通过 controller.output 推送延时行，让浮窗底部计时表显示该延时。
             # 「活人感」开启时由 post_action_pause 接管（随机 0.5~3s + 手牌悬停），
@@ -132,6 +154,11 @@ class RecommendationFlow:
                     except Exception:
                         pass
                 self.sleep(self.post_action_delay)
+            # 动作执行后立刻查一次手牌有没有变多（这个操作触发了抽牌）：
+            # 查到了就按张数追加延时；还没写进日志就留到下一步再查。
+            # 关闭该功能（0）时不做这次额外读取，保持原有节奏。
+            if self.draw_extra_delay_per_card > 0:
+                self._account_hand_entries(self.state_supplier()[0])
             verified = self._verify_result(
                 proposed, adapted, current_frame,
                 fresh_state, fresh_revision)
@@ -169,6 +196,73 @@ class RecommendationFlow:
             if remaining <= 0:
                 return state, revision
             self.sleep(remaining)
+
+    # -------------------------------------------------- 抽牌额外延时（回合内抽牌）
+    @staticmethod
+    def _hand_entry_count(state):
+        """手牌入场计数（Power.log 里 ZONE→HAND 的累计次数）。"""
+        try:
+            return int(getattr(state, "hand_entry_count", 0) or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    def _account_hand_entries(self, state):
+        """我方回合手牌变多 = 抽到牌 → 每张追加「抽牌额外延时」。
+
+        规则（按需求）：
+          * 每回合开始那一下的常规抽 1 张不算（本回合我方还没动作过时让掉 1 张）；
+          * 同一回合里再多抽的（开局一次抽 2 张）算；
+          * 回合内任何操作触发的抽牌，每张都算。
+        对手回合的抽牌不归我们延时；换局导致计数清零时重新开始记账。
+        该功能关闭（0 秒/张）时直接不记账。
+        """
+        if self.draw_extra_delay_per_card <= 0:
+            return 0
+        count = self._hand_entry_count(state)
+        previous = self._seen_entry_count
+        self._seen_entry_count = count
+
+        turn = getattr(state, "game_num_turns_in_play", None)
+        if self._entry_turn is _UNSET_TURN or turn != self._entry_turn:
+            # 新回合（或新的一局）：免费那张与“本回合动作记录”都重新开始。
+            self._entry_turn = turn
+            self._entry_turn_exempt_used = False
+            self._acted_this_turn = False
+
+        if previous is None or count == previous:
+            return 0
+        if count < previous:                     # 换局/计数清零
+            return 0
+        if not getattr(state, "is_my_turn", False):
+            return 0
+
+        gained = count - previous
+        if not self._entry_turn_exempt_used and not self._acted_this_turn:
+            # 我方本回合还没动作过 → 这次增加是回合开始的常规抽牌，让掉 1 张。
+            self._entry_turn_exempt_used = True
+            gained -= 1
+        if gained <= 0:
+            return 0
+        extra = gained * self.draw_extra_delay_per_card
+        if extra <= 0:
+            return gained
+        self._announce(f"[SYS] 抽到 {gained} 张牌，额外延时 {extra:.1f}s 后继续")
+        self.sleep(extra)
+        return gained
+
+    def _announce(self, text):
+        """把延时说明同时打到控制台与浮窗（浮窗按「延时」关键字收）。"""
+        try:
+            print(text)
+        except Exception:
+            pass
+        output = getattr(self.controller, "output", None)
+        if output is None:
+            return
+        try:
+            output(text)
+        except Exception:
+            pass
 
     def _frame_for(self, frame_id):
         # Capture implementations may retain the stable reader's current frame.

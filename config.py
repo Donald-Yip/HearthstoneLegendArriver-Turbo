@@ -336,6 +336,7 @@ _USER_DELAY_KEYS = (
     "first_turn_per_card_delay_seconds",
     "pre_action_delay_seconds",
     "post_action_delay_seconds",
+    "draw_extra_delay_per_card_seconds",
     "ocr_preprocess_scale",
 )
 
@@ -432,6 +433,13 @@ class RecommendationConfig:
     # 一次操作执行完成之后到下轮截图+OCR 的延时（0 = 立即开始）；
     # 配合上面"回合只延时一次"使用。>0 会拉开操作间距，让盒子有时间更新。
     post_action_delay_seconds: float = 0.5
+    # 抽牌额外延时（秒/张）：我方回合里抽到牌时，在「操作后延时」之外再等。
+    #   * 每回合开始那一下的常规抽 1 张不算（那 1 张是免费的）；
+    #   * 同一回合里再多抽的（例如开局一次抽 2 张）要算；
+    #   * 回合内任何操作触发的抽牌，每张都算。
+    # 作用：抽牌会连带手牌动画 + 盒子面板刷新，等够了再截图/OCR 才不会读到旧推荐。
+    # 可通过 ui_config.json 的 delays 段覆盖（网页「延时设置」可调，0 = 关闭）。
+    draw_extra_delay_per_card_seconds: float = 1.0
     # 单次读取（截图+OCR+解析）的超时保护（秒）。
     recognition_timeout_seconds: float = 2.0
     # 单次执行（点击操作）结果的等待/校验超时（秒）。

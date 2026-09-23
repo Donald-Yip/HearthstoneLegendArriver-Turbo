@@ -173,6 +173,9 @@ def initialize_recommendation_automation():
         controller=manual_controller,
         result_timeout=recommendation_config.result_timeout_seconds,
         post_action_delay=recommendation_config.post_action_delay_seconds,
+        # 抽牌额外延时（秒/张）：回合开始的常规抽 1 张不算，回合内抽到的每张都等。
+        draw_extra_delay_per_card=(
+            recommendation_config.draw_extra_delay_per_card_seconds),
         post_action_pause=_human_like_post_action_pause,
         stopped=shutdown_event.is_set,
     )
