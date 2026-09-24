@@ -197,11 +197,14 @@ a:hover{color:#fff3c9;border-bottom-color:#fff3c9}
         <span style="display:flex;gap:10px;align-items:center">
           <span id="selfcheckBadge" class="chip">自检中…</span>
           <button id="btnSelfcheck" class="btn btn-ghost btn-small" type="button">🔍 重新自检</button>
+          <button id="btnSelfcheckToggle" class="btn btn-ghost btn-small" type="button">收起</button>
         </span>
       </h2>
       <div class="hint-line" id="selfcheckSummary">正在自检：Python 版本 / 依赖包 / 分辨率与缩放…</div>
-      <div id="selfcheckList" class="check-list"></div>
-      <div class="hint-line">脚本<b>第一次启动时会自动自检一遍</b>，这里显示的就是那次结果，随时可点 [重新自检] 重跑。✅ 达标 · ⚠️ 与推荐值不同（还能跑）· ❌ 缺失或不满足（必须修）。<b>Python 必须是 3.12 的 64 位版本</b>：OCR 后端 paddlepaddle 没有 3.13 及以上的轮子，3.11 及以下也不在本项目实测范围内（推荐 <code>conda create -n HTL python=3.12 -y</code>）。</div>
+      <div id="selfcheckBody">
+        <div id="selfcheckList" class="check-list"></div>
+        <div class="hint-line">脚本<b>第一次启动时会自动自检一遍</b>，这里显示的就是那次结果，随时可点 [重新自检] 重跑。✅ 达标 · ⚠️ 与推荐值不同（还能跑）· ❌ 缺失或不满足（必须修）。<b>Python 必须是 3.12 的 64 位版本</b>：OCR 后端 paddlepaddle 没有 3.13 及以上的轮子，3.11 及以下也不在本项目实测范围内（推荐 <code>conda create -n HTL python=3.12 -y</code>）。</div>
+      </div>
     </section>
 
     <section class="card">
@@ -854,7 +857,32 @@ function renderSelfcheck(res){
   var badge = $("selfcheckBadge");
   badge.textContent = res.ok ? "✅ 自检通过" : "❌ " + res.failed + " 项待修";
   badge.className = "chip" + (res.ok ? "" : " amber");
+  /* 有 ❌ 时自动展开（不然问题被收起来看不见）；这不算用户偏好，不写进本地记录 */
+  if (!res.ok) setSelfcheckCollapsed(false, false);
 }
+
+/* ---------- 环境自检：可收起（选择记在浏览器本地） ---------- */
+var SELFCHECK_COLLAPSED_KEY = "hsSelfcheckCollapsed";
+
+function setSelfcheckCollapsed(collapsed, remember){
+  var body = $("selfcheckBody"), btn = $("btnSelfcheckToggle");
+  if (!body || !btn) return;
+  body.style.display = collapsed ? "none" : "";
+  btn.textContent = collapsed ? "展开" : "收起";
+  if (remember === false) return;
+  try { localStorage.setItem(SELFCHECK_COLLAPSED_KEY, collapsed ? "1" : "0"); } catch(e){}
+}
+
+function initSelfcheckCollapse(){
+  var saved = null;
+  try { saved = localStorage.getItem(SELFCHECK_COLLAPSED_KEY); } catch(e){}
+  setSelfcheckCollapsed(saved === "1", false);   /* 默认展开 */
+}
+
+$("btnSelfcheckToggle").addEventListener("click", function(){
+  setSelfcheckCollapsed($("selfcheckBody").style.display !== "none");
+});
+initSelfcheckCollapse();
 
 $("btnSelfcheck").addEventListener("click", function(){
   var btn = $("btnSelfcheck");
