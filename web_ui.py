@@ -1200,8 +1200,27 @@ def _bind_overlay():
         # 「账号」行的眼睛按钮：是否显示昵称（默认显示），点一下互换并记住。
         account_visible_setting=_overlay_account_visible(),
         on_toggle_account=_overlay_save_account_visible,
+        on_calibrate=_overlay_toggle_calibrate,
         on_exit=_overlay_exit,
     )
+
+
+def _overlay_toggle_calibrate():
+    """浮窗「校准」按钮：在屏幕上叠加显示/收起所有截图区域框。
+
+    框是置顶且鼠标穿透的，只用来对照着把盒子 UI 摆正；返回切换后是否显示。
+    """
+    try:
+        import region_overlay
+    except Exception as exc:
+        _log("WARN", f"截图区域框不可用：{exc}")
+        return False
+    try:
+        visible = region_overlay.toggle()
+    except Exception as exc:
+        _log("WARN", f"显示截图区域框失败：{exc}")
+        return False
+    return bool(visible)
 
 
 def _overlay_account_visible() -> bool:

@@ -132,6 +132,16 @@ def _font(size: int):
     return None
 
 
+def label_font(size: int):
+    """公开的字体加载入口（区域框预览图与屏幕叠加层共用）。"""
+    return _font(size)
+
+
+def panel_visible(crop) -> bool:
+    """公开入口：判断一块截图里有没有盒子面板（暗红标题栏 + 像素方差）。"""
+    return _default_panel_detector(crop)
+
+
 def _check(key: str, label: str, status: str, detail: str,
            hint: str = "", required: bool = True) -> dict:
     return {"key": key, "label": label, "status": status, "detail": detail,
@@ -154,6 +164,79 @@ def _expected(config) -> tuple[int, int, int]:
 
 
 # ---------------------------------------------------------------- 预览图
+def draw_region_boxes(image, config=None, scale: float = 1.0) -> list[dict]:
+    """在 PIL 图像上画出所有截图区域框 + 标签，并回填 in_bounds。
+
+    网页里的区域框预览图与屏幕上叠加的「校准」框共用这一份绘制逻辑，
+    保证两处画出来的框完全一致。scale 是图像相对屏幕的缩放倍数。
+    """
+    from PIL import ImageColor, ImageDraw
+
+    draw = ImageDraw.Draw(image)
+    try:
+        draw.fontmode = "1"  # 关掉抗锯齿，小字更清楚
+    except Exception:
+        pass
+    font = _font(16)
+    small = _font(13)
+    width, height = image.size
+    regions = screenshot_regions(config)
+    for region in regions:
+        left, top, right, bottom = region["box"]
+        in_bounds = (0 <= left < right <= width and 0 <= top < bottom <= height)
+        region["in_bounds"] = in_bounds
+        if not in_bounds:
+            continue
+        color = ImageColor.getrgb(region["color"])
+        x0, y0 = int(left * scale), int(top * scale)
+        x1, y1 = int(right * scale), int(bottom * scale)
+        draw.rectangle((x0, y0, x1, y1), outline=color,
+                       width=int(region.get("width", 3)))
+        label = (f"{region['label']} {left},{top},{right},{bottom}"
+                 if font is not None else
+                 f"{region['key']} {left},{top},{right},{bottom}")
+        text_draw = small if small is not None else font
+        try:
+            text_box = draw.textbbox((0, 0), label, font=text_draw)
+            text_width = text_box[2] - text_box[0]
+            text_height = text_box[3] - text_box[1]
+        except Exception:
+            text_width, text_height = len(label) * 7, 14
+        label_x = min(max(0, x0), max(0, width - text_width - 8))
+        if region.get("label_below"):
+            label_y = min(y1 + 4, max(0, height - text_height - 4))
+        else:
+            label_y = y0 - text_height - 8
+            if label_y < 0:
+                label_y = min(y0 + 4, max(0, height - text_height - 4))
+        draw.rectangle((label_x - 3, label_y - 2,
+                        label_x + text_width + 3, label_y + text_height + 3),
+                       fill=(0, 0, 0))
+        draw.text((label_x, label_y), label, fill=color, font=text_draw)
+    return regions
+
+
+def draw_state_probe_points(image, scale: float = 1.0) -> list[dict]:
+    """把阶段判定点画成黄色十字准星（同样是预览图与屏幕叠加层共用）。"""
+    from PIL import ImageColor, ImageDraw
+
+    draw = ImageDraw.Draw(image)
+    width, height = image.size
+    color = ImageColor.getrgb("#f7d97e")
+    probes = state_probe_points()
+    for probe in probes:
+        px, py = probe["point"]
+        in_bounds = 0 <= px < width and 0 <= py < height
+        probe["in_bounds"] = in_bounds
+        if not in_bounds:
+            continue
+        cx, cy = int(px * scale), int(py * scale)
+        draw.line((cx - 9, cy, cx + 9, cy), fill=color, width=2)
+        draw.line((cx, cy - 9, cx, cy + 9), fill=color, width=2)
+        draw.ellipse((cx - 3, cy - 3, cx + 3, cy + 3), outline=color, width=2)
+    return probes
+
+
 def build_region_preview(config=None, grabber: Optional[Callable] = None,
                          screen_metrics: Optional[Callable] = None,
                          panel_detector: Optional[Callable] = None,
@@ -194,10 +277,6 @@ def build_region_preview(config=None, grabber: Optional[Callable] = None,
         draw.fontmode = "1"  # 关掉抗锯齿，小字更清楚
     except Exception:
         pass
-    font = _font(16)
-    small = _font(13)
-    regions = screenshot_regions(config)
-    probes = state_probe_points()
     checks: list[dict] = []
 
     # --- 分辨率 / 缩放
@@ -221,42 +300,8 @@ def build_region_preview(config=None, grabber: Optional[Callable] = None,
                 "显示设置 → 缩放改成 100%：不是 100% 时截图和点击会整体偏移。"))
 
     # --- 逐个区域：是否在屏幕内 + 画框
-    out_of_bounds = []
-    for region in regions:
-        left, top, right, bottom = region["box"]
-        in_bounds = (0 <= left < right <= actual_width
-                     and 0 <= top < bottom <= actual_height)
-        region["in_bounds"] = in_bounds
-        if not in_bounds:
-            out_of_bounds.append(region)
-            continue
-        color = ImageColor.getrgb(region["color"])
-        x0, y0 = int(left * scale), int(top * scale)
-        x1, y1 = int(right * scale), int(bottom * scale)
-        draw.rectangle((x0, y0, x1, y1), outline=color,
-                       width=int(region.get("width", 3)))
-        label = (f"{region['label']} {left},{top},{right},{bottom}"
-                 if font is not None else
-                 f"{region['key']} {left},{top},{right},{bottom}")
-        text_draw = small if small is not None else font
-        try:
-            text_box = draw.textbbox((0, 0), label, font=text_draw)
-            text_width = text_box[2] - text_box[0]
-            text_height = text_box[3] - text_box[1]
-        except Exception:
-            text_width, text_height = len(label) * 7, 14
-        label_x = min(max(0, x0), max(0, actual_width - text_width - 8))
-        if region.get("label_below"):
-            label_y = min(y1 + 4, max(0, actual_height - text_height - 4))
-        else:
-            label_y = y0 - text_height - 8
-            if label_y < 0:
-                label_y = min(y0 + 4, max(0, actual_height - text_height - 4))
-        draw.rectangle((label_x - 3, label_y - 2,
-                        label_x + text_width + 3, label_y + text_height + 3),
-                       fill=(0, 0, 0))
-        draw.text((label_x, label_y), label, fill=color, font=text_draw)
-
+    regions = draw_region_boxes(image, config, scale=scale)
+    out_of_bounds = [r for r in regions if not r.get("in_bounds")]
     for region in out_of_bounds:
         left, top, right, bottom = region["box"]
         # 区域跑到屏幕外 = 截图会被裁掉、点击也点不到，属于致命问题。
@@ -266,17 +311,7 @@ def build_region_preview(config=None, grabber: Optional[Callable] = None,
             "这个区域会被裁掉/点不到：请校正分辨率与缩放，或重新校准区域。"))
 
     # --- 状态判定点
-    point_color = ImageColor.getrgb("#f7d97e")
-    for probe in probes:
-        px, py = probe["point"]
-        in_bounds = 0 <= px < actual_width and 0 <= py < actual_height
-        probe["in_bounds"] = in_bounds
-        if not in_bounds:
-            continue
-        cx, cy = int(px * scale), int(py * scale)
-        draw.line((cx - 9, cy, cx + 9, cy), fill=point_color, width=2)
-        draw.line((cx, cy - 9, cx, cy + 9), fill=point_color, width=2)
-        draw.ellipse((cx - 3, cy - 3, cx + 3, cy + 3), outline=point_color, width=2)
+    probes = draw_state_probe_points(image, scale=scale)
 
     # --- 绿框里到底有没有盒子面板（决定要不要「移动盒子 UI」）
     recommendation = next((r for r in regions if r["key"] == "recommendation"), None)

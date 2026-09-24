@@ -64,11 +64,17 @@ BTN_LAYOUT = {
     "start": (0, 0),
     "halt": (0, 1),
     "stop_after": (1, 0),
-    "save": (2, 0),
-    "exit": (2, 1),
+    "calibrate": (2, 0),
+    "save": (2, 1),
+    "exit": (3, 0),
 }
 # 需要横跨整行的按钮（单独一行）。
-BTN_SPAN = {"stop_after": 2}
+BTN_SPAN = {"stop_after": 2, "exit": 2}
+
+# 浮窗尺寸：宽度按最长的一行文字/按钮定，高度 = 品牌行 + 状态面板（4 行）
+# + 四行按钮（开始/中止、本局结束后停止、校准/保存日志、退出脚本）+ 日志区。
+WINDOW_WIDTH = 292
+WINDOW_HEIGHT = 628
 
 # 浮窗顶部品牌行：本项目大名 + 一行小字副标题（放在“自动化日志”标题之前）。
 BRAND_NAME = "HSLegendArriver"
@@ -250,6 +256,8 @@ _ACCOUNT = None
 # 「账号」行是否显示昵称（点眼睛按钮切换；由 start() 用保存的偏好初始化）。
 _ACCOUNT_VISIBLE = [True]
 _ON_TOGGLE_ACCOUNT = None
+# 「校准」按钮：在屏幕上叠加显示截图区域框（web_ui 传入）。
+_ON_CALIBRATE = None
 
 
 def account_visible() -> bool:
@@ -402,10 +410,11 @@ def start(on_start=None, on_halt=None, is_running=None,
           is_in_game=None, score_callback=None, on_exit=None,
           human_like_callback=None, concede_callback=None,
           liveness_callback=None, account_callback=None,
-          account_visible_setting=None, on_toggle_account=None) -> None:
+          account_visible_setting=None, on_toggle_account=None,
+          on_calibrate=None) -> None:
     global _ON_START, _ON_HALT, _IS_RUNNING, _ON_STOP_AFTER, _IS_STOP_AFTER
     global _IS_IN_GAME, _SCORE, _ON_EXIT, _HUMAN_LIKE, _CONCEDE_DETECT
-    global _LIVENESS, _ACCOUNT, _ON_TOGGLE_ACCOUNT
+    global _LIVENESS, _ACCOUNT, _ON_TOGGLE_ACCOUNT, _ON_CALIBRATE
     if _STARTED[0]:
         return
     _ON_START = on_start
@@ -421,6 +430,7 @@ def start(on_start=None, on_halt=None, is_running=None,
     _LIVENESS = liveness_callback
     _ACCOUNT = account_callback
     _ON_TOGGLE_ACCOUNT = on_toggle_account
+    _ON_CALIBRATE = on_calibrate
     if account_visible_setting is not None:
         _ACCOUNT_VISIBLE[0] = bool(account_visible_setting)
     _STOP.clear()
@@ -431,6 +441,12 @@ def start(on_start=None, on_halt=None, is_running=None,
 def stop() -> None:
     """Signal the overlay thread to close its window."""
     _STOP.set()
+    # 屏幕上还叠着「校准」区域框时一并收掉，别让框留在桌面上。
+    try:
+        import region_overlay
+        region_overlay.hide()
+    except Exception:
+        pass
 
 
 def is_running() -> bool:
@@ -531,9 +547,10 @@ def _run() -> None:
         root.attributes("-alpha", ALPHA)
         sw = root.winfo_screenwidth()
         sh = root.winfo_screenheight()
-        # 高度：品牌行 + 状态面板（4 行）+ 三行按钮都要放得下，日志区还要有
-        # 9 行左右。按钮改成一行两个 + 字号变小后，比原来（640）矮 40px。
-        W, H = 292, 600
+        # 高度：品牌行 + 状态面板（4 行）+ 四行按钮都要放得下，日志区还要有
+        # 9 行左右。按钮改成一行两个 + 字号变小后比原来（640）矮；新增「校准」
+        # 按钮后又加回一行，所以是 628。
+        W, H = WINDOW_WIDTH, WINDOW_HEIGHT
         x = sw - W - 12
         y = 12
         root.geometry(f"{W}x{H}+{x}+{y}")
@@ -740,6 +757,28 @@ def _run() -> None:
 
         save_btn = _make_btn(btn_frame, "💾  保存日志", OK, _call_save)
         _place(save_btn, "save")
+
+        def _call_calibrate():
+            """在屏幕上叠加显示截图区域框（对齐盒子 UI 用），再点一次收起。"""
+            visible = None
+            try:
+                if _ON_CALIBRATE is not None:
+                    visible = _ON_CALIBRATE()
+            except Exception as exc:
+                push(f"[SYS] 显示截图区域框失败：{exc}")
+                return
+            finally:
+                # 框是鼠标穿透的，但点浮窗按钮本身会把浮窗带到前台，
+                # 顺手把炉石切回前台，方便对着游戏画面调盒子。
+                _raise_hearthstone()
+            if visible:
+                push("[SYS] 已显示截图区域框：请对齐相应UI"
+                     "（Esc 或再点「校准」关闭）")
+            else:
+                push("[SYS] 已关闭截图区域框。")
+
+        calibrate_btn = _make_btn(btn_frame, "校准", ACCENT, _call_calibrate)
+        _place(calibrate_btn, "calibrate")
 
         def _call_exit():
             try:

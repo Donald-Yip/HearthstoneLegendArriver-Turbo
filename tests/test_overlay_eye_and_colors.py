@@ -240,9 +240,22 @@ class ButtonLayoutTests(unittest.TestCase):
         for key, (row, column) in log_overlay.BTN_LAYOUT.items():
             rows.setdefault(row, []).append(column)
 
-        self.assertEqual({0: [0, 1], 1: [0], 2: [0, 1]}, rows)
+        # 第 3 行只有「退出脚本」（横跨整行），其余都是一行两个。
+        self.assertEqual({0: [0, 1], 1: [0], 2: [0, 1], 3: [0]}, rows)
         for columns in rows.values():
             self.assertLessEqual(len(columns), 2)
+
+    def test_calibrate_button_sits_next_to_save(self):
+        self.assertEqual(log_overlay.BTN_LAYOUT["save"], (2, 1))
+        self.assertEqual(log_overlay.BTN_LAYOUT["calibrate"], (2, 0))
+        self.assertNotIn("calibrate", log_overlay.BTN_SPAN)
+
+    def test_exit_spans_the_whole_last_row(self):
+        self.assertEqual(2, log_overlay.BTN_SPAN["exit"])
+        row, _column = log_overlay.BTN_LAYOUT["exit"]
+        rows = [r for key, (r, _c) in log_overlay.BTN_LAYOUT.items()
+                if key != "exit"]
+        self.assertEqual(max(rows) + 1, row)
 
     def test_every_button_has_a_unique_slot(self):
         slots = list(log_overlay.BTN_LAYOUT.values())

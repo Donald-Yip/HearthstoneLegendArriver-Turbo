@@ -93,24 +93,21 @@ class RegionsPageTests(unittest.TestCase):
     def setUp(self):
         self.html = INDEX_HTML.read_text(encoding="utf8")
 
-    def test_region_preview_elements_exist(self):
-        for token in ('id="btnRegions"', 'id="btnRegionsHide"',
-                      'id="regionsResult"', 'id="regionsChecks"',
-                      'id="regionsRows"', 'id="regionsImg"',
-                      'id="cardRegions"'):
-            self.assertIn(token, self.html)
+    def test_page_points_at_the_overlay_calibrate_button(self):
+        """按钮已从网页移到日志浮窗，页面只保留指路说明。"""
+        self.assertIn("日志浮窗", self.html)
+        self.assertIn("「校准」", self.html)
+        self.assertIn("请对齐相应UI", self.html)
 
-    def test_page_calls_the_regions_api(self):
-        self.assertIn('get("/api/regions")', self.html)
+    def test_page_no_longer_has_the_in_page_preview(self):
+        for token in ('id="btnRegions"', 'id="regionsImg"',
+                      'id="regionsResult"'):
+            self.assertNotIn(token, self.html)
 
     def test_page_explains_what_the_region_boxes_mean(self):
-        for token in ("绿框=盒子推荐面板", "蓝框=换牌", "1920×1080",
-                      "打法参考A", "100%"):
+        for token in ("盒子推荐面板", "换牌确认按钮", "AI胜率浮动条",
+                      "阶段判定点", "鼠标穿透"):
             self.assertIn(token, self.html)
-
-    def test_preview_image_is_shown_inline(self):
-        self.assertIn('class="region-shot"', self.html)
-        self.assertIn('$("regionsImg").src = res.image', self.html)
 
 
 if __name__ == "__main__":
